@@ -1,6 +1,6 @@
-# CatSkinC-Remake
+# CatSkinC
 
-CatSkinC-Remake is a Minecraft client mod for cloud skin upload, skin history, and live skin sync.
+CatSkinC is a Minecraft client mod for cloud skin upload, skin history, and live skin sync.
 It is built with Architectury for Fabric and Forge.
 
 ## Features
@@ -85,7 +85,22 @@ Important values:
 - `apiBaseUrl`
 - `pathUpload`, `pathSelect`, `pathSelected`, `pathPublic`, `pathEvents`
 - `timeoutMs`
+- `selectedCacheTtlMs`, `pingCacheTtlMs`
+- `allowInsecureHttp` (default `false`, allows only HTTPS except localhost)
+- `requestSigningKey` (optional shared HMAC key with server)
+- `tlsPinSha256` (optional SHA-256 public-key pin for HTTPS)
 - `debugLogging`, `traceLogging`
+
+Sensitive values can be injected without writing to config file:
+
+- `CATSKINC_REQUEST_SIGNING_KEY`
+- `CATSKINC_TLS_PIN_SHA256`
+- JVM properties `catskinc.requestSigningKey` / `catskinc.tlsPinSha256`
+
+## Release Hardening
+
+- Build hardening is enabled by default via `harden_build=true` (strips Java debug metadata and makes jars reproducible).
+- To disable for local debugging: `-Pharden_build=false`
 
 ## Development Notes
 

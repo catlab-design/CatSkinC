@@ -17,6 +17,7 @@ subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
+    def hardenBuild = (rootProject.findProperty("harden_build")?.toString()?.toBoolean() ?: true)
 
     base {
         archivesName = "$rootProject.archives_name-$project.name"
@@ -41,6 +42,15 @@ subprojects {
     tasks.withType(JavaCompile).configureEach {
         options.release = 17
         options.encoding = "UTF-8"
+        if (hardenBuild) {
+            options.debug = false
+            options.compilerArgs += ['-g:none']
+        }
+    }
+
+    tasks.withType(AbstractArchiveTask).configureEach {
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
     }
 
     publishing {
