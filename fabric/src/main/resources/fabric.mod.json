@@ -19,16 +19,25 @@
     ],
     "client": [
       "com.sammy.catskincRemake.fabric.client.CatskincRemakeFabricClient"
+    ],
+    "voicechat": [
+      "com.sammy.catskincRemake.client.voice.SimpleVoiceChatBridgePlugin"
     ]
   },
   "mixins": [
     "catskinc-remake.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.15.0",
-    "minecraft": ">=1.20.1",
-    "java": ">=17",
-    "architectury": ">=9.2.14",
+    "fabricloader": "${fabric_loader_version_range}",
+    "minecraft": "${minecraft_version_range}",
+    "java": "${java_version_range}",
+    "architectury": "${architectury_version_range}",
     "fabric-api": "*"
+  },
+  "suggests": {
+    "voicechat": "*",
+    "plasmovoice": "*",
+    "figura": "*",
+    "emotecraft": "*"
   }
 }

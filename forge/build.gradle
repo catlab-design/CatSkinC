@@ -8,6 +8,33 @@ loom {
     }
 }
 
+def manualVoiceModsCleanup = tasks.register("cleanupManualVoiceMods") {
+    group = "verification"
+    description = "Removes manually dropped voice mod jars from forge/run/mods to prevent mapping crashes in dev runtime."
+    doLast {
+        File modsDir = file("$projectDir/run/mods")
+        if (!modsDir.exists() || !modsDir.isDirectory()) {
+            return
+        }
+
+        def conflicts = modsDir.listFiles()?.findAll { file ->
+            def lower = file.name.toLowerCase(java.util.Locale.ROOT)
+            return lower.endsWith(".jar")
+                    && (lower.contains("voicechat")
+                    || lower.contains("simple-voice-chat")
+                    || lower.contains("plasmo-voice")
+                    || lower.contains("plasmovoice"))
+        } ?: []
+
+        conflicts.each { file ->
+            logger.warn("Removing manually dropped dev mod '{}'; voice runtime mods are injected via Gradle.", file.name)
+            if (!file.delete()) {
+                logger.warn("Could not delete '{}'. Please remove it manually from {}.", file.name, modsDir.absolutePath)
+            }
+        }
+    }
+}
+
 architectury {
     platformSetupLoomIde()
     forge()
@@ -31,19 +58,35 @@ configurations {
 }
 
 dependencies {
-    forge "net.minecraftforge:forge:$rootProject.forge_version"
+    def enableVoiceDevRuntimeMods = (rootProject.findProperty("enable_voice_dev_runtime_mods")?.toString()?.toBoolean() ?: true)
 
-    modImplementation "dev.architectury:architectury-forge:$rootProject.architectury_api_version"
+    forge "net.minecraftforge:forge:$rootProject.ext.selectedForgeVersion"
+
+    modImplementation "dev.architectury:architectury-forge:$rootProject.ext.selectedArchitecturyVersion"
 
     common(project(path: ':common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':common', configuration: 'transformProductionForge')
+
+    if (enableVoiceDevRuntimeMods) {
+        // Resolve voice mods through Loom so they are remapped for Yarn-named Forge dev runtime.
+        modRuntimeOnly "maven.modrinth:simple-voice-chat:$rootProject.ext.selectedVoicechatModrinthVersion"
+        modRuntimeOnly "maven.modrinth:plasmo-voice:$rootProject.ext.selectedPlasmoVoiceModrinthVersion"
+    }
 }
 
 processResources {
     inputs.property 'version', project.version
+    inputs.property 'forge_loader_range', "[${rootProject.ext.selectedForgeLoaderMajor},)"
+    inputs.property 'minecraft_version_range', "[${rootProject.ext.selectedMinecraftVersion},)"
+    inputs.property 'architectury_version_range', "[${rootProject.ext.selectedArchitecturyVersion},)"
 
     filesMatching('META-INF/mods.toml') {
-        expand version: project.version
+        expand(
+                version: project.version,
+                forge_loader_range: "[${rootProject.ext.selectedForgeLoaderMajor},)",
+                minecraft_version_range: "[${rootProject.ext.selectedMinecraftVersion},)",
+                architectury_version_range: "[${rootProject.ext.selectedArchitecturyVersion},)"
+        )
     }
 }
 
@@ -54,4 +97,12 @@ shadowJar {
 
 remapJar {
     input.set shadowJar.archiveFile
+}
+
+tasks.configureEach { task ->
+    if (task.name == "dev.architectury.transformer.TransformerRuntime.main"
+            || task.name == "runClient"
+            || task.name == "prepareArchitecturyTransformer") {
+        task.dependsOn(manualVoiceModsCleanup)
+    }
 }

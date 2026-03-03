@@ -428,6 +428,7 @@ extends Screen {
     }
 
     private void renderPreviewArea(DrawContext drawContext, int n, int n2) {
+        OtherClientPlayerEntity otherClientPlayerEntity;
         boolean bl = this.isInside(n, n2, this.dropX, this.dropY, this.dropW, this.dropH);
         drawContext.fill(this.dropX, this.dropY, this.dropX + this.dropW, this.dropY + this.dropH, 0x59191919);
         if (bl) {
@@ -439,8 +440,8 @@ extends Screen {
         if (this.previewId != null && (this.previewPlayer == null || this.previewSlim != this.slimChecked)) {
             this.rebuildPreviewPlayer();
         }
-        LivingEntity livingEntity = this.previewPlayer != null ? this.previewPlayer : minecraftClient.player;
-        if (livingEntity != null) {
+        Object object = otherClientPlayerEntity = this.previewPlayer != null ? this.previewPlayer : minecraftClient.player;
+        if (otherClientPlayerEntity != null) {
             int n3 = this.dropX + 2;
             int n4 = this.dropY + 2;
             int n5 = this.dropX + this.dropW - 2;
@@ -448,7 +449,7 @@ extends Screen {
             drawContext.enableScissor(n3, n4, n5, n6);
             drawContext.getMatrices().push();
             drawContext.getMatrices().translate(0.0, 0.0, 1000.0);
-            InventoryEntityRendererCompat.drawEntity(drawContext, n3, n4, n5, n6, n, n2, livingEntity);
+            InventoryEntityRendererCompat.drawEntity(drawContext, n3, n4, n5, n6, n, n2, (LivingEntity)otherClientPlayerEntity);
             drawContext.getMatrices().pop();
             drawContext.disableScissor();
         }
@@ -682,16 +683,15 @@ extends Screen {
                 drawContext.drawTexture(historyEntry.thumbId, n16, n17, 0.0f, 0.0f, n15, n15, n15, n15);
                 SkinUploadScreen.drawRectBorder(drawContext, n16 - 1, n17 - 1, n15 + 2, n15 + 2, 0x36666666);
             }
-            n7 = 12;
-            n9 = n11 + n12 - n7 - 6;
-            n8 = n10 + (n13 - n7) / 2;
-            bl = this.isInside(n, n2, n9, n8, n7, n7);
-            drawContext.fill(n9, n8, n9 + n7, n8 + n7, bl ? -1517647222 : 0x3A2A2A2A);
-            String deleteIcon = "\u2716";
-            int deleteIconW = this.textRenderer.getWidth(deleteIcon);
-            int deleteIconX = n9 + (n7 - deleteIconW) / 2;
-            int deleteIconY = n8 + (n7 - this.textRenderer.fontHeight) / 2 + 1;
-            drawContext.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)deleteIcon), deleteIconX, deleteIconY, -1);
+            drawContext.fill(n9, n8, n9 + n7, n8 + n7, (bl = this.isInside(n, n2, n9 = n11 + n12 - (n7 = 12) - 6, n8 = n10 + (n13 - n7) / 2, n7, n7)) ? -1517647222 : 0x3A2A2A2A);
+            float f = 0.78f;
+            drawContext.getMatrices().push();
+            drawContext.getMatrices().scale(f, f, 1.0f);
+            float f2 = 1.0f / f;
+            int n18 = Math.round(((float)n9 + (float)n7 / 2.0f) * f2);
+            int n19 = Math.round(((float)n8 + 2.0f) * f2);
+            drawContext.drawCenteredTextWithShadow(this.textRenderer, (Text)Text.literal((String)"\u2716"), n18, n19, -1);
+            drawContext.getMatrices().pop();
             int n20 = n16 + n15 + 8;
             int n21 = Math.max(20, n9 - n20 - 8);
             drawContext.getMatrices().push();
@@ -801,11 +801,11 @@ extends Screen {
                         return;
                     }
                     ModSounds.play(ModSounds.UI_COMPLETE);
-                    if (minecraftClient.player != null) {
-                        SkinOverrideStore.clear(minecraftClient.player.getUuid());
-                        ServerApiClient.selectSkin(minecraftClient.player.getUuid(), string, bl);
-                        SkinManagerClient.setSlim(minecraftClient.player.getUuid(), bl);
-                        SkinManagerClient.refresh(minecraftClient.player.getUuid());
+                    if (minecraftClient2.player != null) {
+                        SkinOverrideStore.clear(minecraftClient2.player.getUuid());
+                        ServerApiClient.selectSkin(minecraftClient2.player.getUuid(), string, bl);
+                        SkinManagerClient.setSlim(minecraftClient2.player.getUuid(), bl);
+                        SkinManagerClient.refresh(minecraftClient2.player.getUuid());
                     }
                 });
             }
@@ -1006,7 +1006,7 @@ extends Screen {
         this.previewPlayer.headYaw = 180.0f;
         this.previewPlayer.setPitch(0.0f);
         try {
-            this.previewPlayer.getDataTracker().set(PlayerEntityAccessor.catskincRemake$getPlayerModelParts(), (byte)127);
+            this.previewPlayer.getDataTracker().set(PlayerEntityAccessor.catskincRemake$getPlayerModelParts(), (Object)127);
         }
         catch (Exception exception) {
             ModLog.trace("Preview player model part update failed: {}", exception.getMessage());

@@ -7,9 +7,7 @@
     "PlayerRendererMixin",
     "PlayerEntityAccessor",
     "AbstractClientPlayerEntityMixin120",
-    "PlayerListEntryMixin120",
-    "AbstractClientPlayerEntityMixin121",
-    "PlayerListEntryMixin121"
+    "PlayerListEntryMixin120"
   ],
   "mixins": [
   ],

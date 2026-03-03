@@ -8,7 +8,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
 public final class Toasts {
-    private static final Identifier TOAST_TEXTURE = new Identifier("textures/gui/toasts.png");
+    private static final Identifier TOAST_TEXTURE = Identifiers.parse("minecraft:textures/gui/toasts.png");
 
     private Toasts() {
     }

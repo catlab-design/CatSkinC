@@ -10,6 +10,7 @@ import java.lang.reflect.Method;
 
 public final class InventoryEntityRendererCompat {
     private static final Method DRAW_ENTITY_NEW = findNewDrawMethod();
+    private static final Method DRAW_ENTITY_LEGACY = findLegacyDrawMethod();
 
     private InventoryEntityRendererCompat() {
     }
@@ -21,10 +22,7 @@ public final class InventoryEntityRendererCompat {
         if (tryDrawNew(context, x1, y1, x2, y2, mouseX, mouseY, entity)) {
             return;
         }
-        int centerX = (x1 + x2) / 2;
-        int centerY = y2 - 22;
-        int size = Math.max(20, Math.min(x2 - x1, y2 - y1) / 3);
-        InventoryScreen.drawEntity(context, centerX, centerY, size, (float) (centerX - mouseX), (float) (centerY - mouseY), entity);
+        tryDrawLegacy(context, x1, y1, x2, y2, mouseX, mouseY, entity);
     }
 
     private static boolean tryDrawNew(DrawContext context, int x1, int y1, int x2, int y2, int mouseX, int mouseY, LivingEntity entity) {
@@ -64,6 +62,46 @@ public final class InventoryEntityRendererCompat {
                 continue;
             }
             if (params[1] != float.class || params[2] != float.class || params[3] != float.class) {
+                continue;
+            }
+            method.setAccessible(true);
+            return method;
+        }
+        return null;
+    }
+
+    private static boolean tryDrawLegacy(DrawContext context, int x1, int y1, int x2, int y2, int mouseX, int mouseY, LivingEntity entity) {
+        if (DRAW_ENTITY_LEGACY == null) {
+            return false;
+        }
+        try {
+            int centerX = (x1 + x2) / 2;
+            int centerY = y2 - 22;
+            int size = Math.max(20, Math.min(x2 - x1, y2 - y1) / 3);
+            DRAW_ENTITY_LEGACY.invoke(null, context, centerX, centerY, size,
+                    (float) (centerX - mouseX), (float) (centerY - mouseY), entity);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static Method findLegacyDrawMethod() {
+        for (Method method : InventoryScreen.class.getMethods()) {
+            if (!"drawEntity".equals(method.getName())) {
+                continue;
+            }
+            Class<?>[] params = method.getParameterTypes();
+            if (params.length != 7) {
+                continue;
+            }
+            if (!DrawContext.class.isAssignableFrom(params[0])) {
+                continue;
+            }
+            if (params[1] != int.class || params[2] != int.class || params[3] != int.class) {
+                continue;
+            }
+            if (params[4] != float.class || params[5] != float.class) {
                 continue;
             }
             method.setAccessible(true);

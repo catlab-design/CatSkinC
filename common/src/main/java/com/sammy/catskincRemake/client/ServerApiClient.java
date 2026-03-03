@@ -3,10 +3,6 @@ package com.sammy.catskincRemake.client;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLPeerUnverifiedException;
 import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -19,13 +15,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,19 +38,31 @@ public final class ServerApiClient {
         }
     }
 
-    public record SelectedSkin(String url, boolean slim) {
+    public record SelectedSkin(String url, String mouthOpenUrl, String mouthCloseUrl, boolean slim) {
+        public String mouthUrl() {
+            return mouthOpenUrl;
+        }
+    }
+
+    public record ClearResult(boolean ok, boolean changed, String mode, String message) {
     }
 
     public static final class UpdateEvent {
         public final UUID uuid;
         public final String id;
         public final String url;
+        public final String mouthUrl;
+        public final String mouthOpenUrl;
+        public final String mouthCloseUrl;
         public final Boolean slim;
 
-        public UpdateEvent(UUID uuid, String id, String url, Boolean slim) {
+        public UpdateEvent(UUID uuid, String id, String url, String mouthOpenUrl, String mouthCloseUrl, Boolean slim) {
             this.uuid = uuid;
             this.id = id;
             this.url = url;
+            this.mouthOpenUrl = mouthOpenUrl;
+            this.mouthCloseUrl = mouthCloseUrl;
+            this.mouthUrl = mouthOpenUrl;
             this.slim = slim;
         }
     }
@@ -70,25 +75,20 @@ public final class ServerApiClient {
     private static final int BODY_PREVIEW_LIMIT = 220;
     private static final ProgressListener NO_OP_PROGRESS = new ProgressListener() {
     };
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
-    private static final String HEADER_SIGNATURE_TIMESTAMP = "X-CatSkin-Timestamp";
-    private static final String HEADER_SIGNATURE_NONCE = "X-CatSkin-Nonce";
-    private static final String HEADER_SIGNATURE = "X-CatSkin-Signature";
 
-    private static volatile String baseUrl = "https://storage-api.catskin.space";
-    private static volatile String pathUpload = "/upload";
-    private static volatile String pathSelect = "/select";
-    private static volatile String pathSelected = "/selected";
-    private static volatile String pathPublic = "/public/";
-    private static volatile String pathEvents = "/events";
-    private static volatile int timeoutMs = 15_000;
-    private static volatile long selectedCacheTtlMs = 1_500L;
-    private static volatile long pingCacheTtlMs = 10_000L;
+    // private static final String BASE_URL = "https://storage-api.catskin.space";
+    private static final String BASE_URL = "http://127.0.0.1:2555";
+    private static final String PATH_UPLOAD = "/upload";
+    private static final String PATH_SELECT = "/select";
+    private static final String PATH_SELECTED = "/selected";
+    private static final String PATH_PUBLIC = "/public/";
+    private static final String PATH_EVENTS = "/events";
+    private static final int TIMEOUT_MS = 15_000;
+    private static final long SELECTED_CACHE_TTL_MS = 1_500L;
+    private static final long PING_CACHE_TTL_MS = 10_000L;
 
     private static volatile String authToken;
-    private static volatile String requestSigningKey;
-    private static volatile String tlsPinSha256;
 
     private static volatile Thread sseThread;
     private static volatile boolean sseStop;
@@ -97,30 +97,6 @@ public final class ServerApiClient {
     private static volatile CachedPing cachedPing;
 
     private ServerApiClient() {
-    }
-
-    public static void reloadFromConfig() {
-        ClientConfig config = ConfigManager.get();
-        config.sanitize();
-        baseUrl = config.apiBaseUrl;
-        pathUpload = config.pathUpload;
-        pathSelect = config.pathSelect;
-        pathSelected = config.pathSelected;
-        pathPublic = config.pathPublic.endsWith("/") ? config.pathPublic : (config.pathPublic + "/");
-        pathEvents = config.pathEvents;
-        timeoutMs = config.timeoutMs;
-        selectedCacheTtlMs = config.selectedCacheTtlMs;
-        pingCacheTtlMs = config.pingCacheTtlMs;
-        requestSigningKey = resolveSecret(config.requestSigningKey, "CATSKINC_REQUEST_SIGNING_KEY", "catskinc.requestSigningKey");
-        tlsPinSha256 = resolveTlsPin(config.tlsPinSha256);
-        ModLog.debug("API config applied: baseUrl={}, upload={}, select={}, selected={}, public={}, events={}, timeoutMs={}",
-                baseUrl, pathUpload, pathSelect, pathSelected, pathPublic, pathEvents, timeoutMs);
-        SELECTED_CACHE.clear();
-        SELECTED_IN_FLIGHT.clear();
-        cachedPing = null;
-        ModLog.debug("API security config: requestSigning={}, tlsPin={}",
-                requestSigningKey != null && !requestSigningKey.isBlank(),
-                tlsPinSha256 != null && !tlsPinSha256.isBlank());
     }
 
     public static void setAuthToken(String token) {
@@ -134,6 +110,16 @@ public final class ServerApiClient {
     }
 
     public static void uploadSkinAsync(File file, UUID playerUuid, boolean slim, ProgressListener callback) {
+        uploadSkinAsync(file, null, null, playerUuid, slim, callback);
+    }
+
+    public static void uploadSkinAsync(File file, File mouthFile, UUID playerUuid, boolean slim,
+            ProgressListener callback) {
+        uploadSkinAsync(file, mouthFile, null, playerUuid, slim, callback);
+    }
+
+    public static void uploadSkinAsync(File file, File mouthOpenFile, File mouthCloseFile, UUID playerUuid,
+            boolean slim, ProgressListener callback) {
         ProgressListener listener = callback == null ? NO_OP_PROGRESS : callback;
         CompletableFuture.runAsync(() -> {
             if (file == null || !file.isFile()) {
@@ -141,18 +127,37 @@ public final class ServerApiClient {
                 listener.onDone(false, "Invalid file");
                 return;
             }
-            ModLog.debug("Upload start: file='{}', size={} bytes, uuid={}, slim={}",
-                    safeFileName(file), file.length(), playerUuid, slim);
+            if (mouthOpenFile != null && !mouthOpenFile.isFile()) {
+                ModLog.warn("Upload aborted: invalid mouth_open file={}", mouthOpenFile);
+                listener.onDone(false, "Invalid mouth_open file");
+                return;
+            }
+            if (mouthCloseFile != null && !mouthCloseFile.isFile()) {
+                ModLog.warn("Upload aborted: invalid mouth_close file={}", mouthCloseFile);
+                listener.onDone(false, "Invalid mouth_close file");
+                return;
+            }
+            ModLog.debug("Upload start: file='{}', mouthOpen='{}', mouthClose='{}', size={} bytes, uuid={}, slim={}",
+                    safeFileName(file), safeFileName(mouthOpenFile), safeFileName(mouthCloseFile),
+                    file.length(), playerUuid, slim);
+            HttpURLConnection connection = null;
             try {
                 String boundary = "----CatSkinC-" + System.nanoTime();
-                HttpURLConnection connection = open("POST", pathUpload, "multipart/form-data; boundary=" + boundary);
+                connection = open("POST", PATH_UPLOAD, "multipart/form-data; boundary=" + boundary);
 
-                long totalBytes = file.length();
+                boolean includeLegacyMouth = mouthOpenFile != null;
+                long multipartOverhead = estimateMultipartOverhead(
+                        boundary, playerUuid, slim, mouthOpenFile != null, mouthCloseFile != null, includeLegacyMouth);
+                long totalBytes = file.length()
+                        + (mouthOpenFile == null ? 0L : mouthOpenFile.length())
+                        + (mouthCloseFile == null ? 0L : mouthCloseFile.length())
+                        + multipartOverhead;
                 listener.onStart(totalBytes);
 
                 try (OutputStream baseOut = connection.getOutputStream();
-                     CountingOutputStream out = new CountingOutputStream(baseOut, totalBytes, listener);
-                     PrintWriter writer = new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8), true)) {
+                        CountingOutputStream out = new CountingOutputStream(baseOut, totalBytes, listener);
+                        PrintWriter writer = new PrintWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8),
+                                true)) {
 
                     writer.append("--").append(boundary).append("\r\n");
                     if (playerUuid != null) {
@@ -165,7 +170,8 @@ public final class ServerApiClient {
                     writer.append(Boolean.toString(slim)).append("\r\n");
 
                     writer.append("--").append(boundary).append("\r\n");
-                    writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"").append("\r\n");
+                    writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"")
+                            .append("\r\n");
                     writer.append("Content-Type: image/png").append("\r\n\r\n");
                     writer.flush();
 
@@ -177,16 +183,65 @@ public final class ServerApiClient {
                         }
                     }
 
+                    if (mouthOpenFile != null) {
+                        writer.append("\r\n--").append(boundary).append("\r\n");
+                        writer.append(
+                                "Content-Disposition: form-data; name=\"mouth_open\"; filename=\"mouth-open.png\"")
+                                .append("\r\n");
+                        writer.append("Content-Type: image/png").append("\r\n\r\n");
+                        writer.flush();
+
+                        try (InputStream in = new FileInputStream(mouthOpenFile)) {
+                            byte[] buffer = new byte[8_192];
+                            int read;
+                            while ((read = in.read(buffer)) != -1) {
+                                out.write(buffer, 0, read);
+                            }
+                        }
+
+                        // Legacy compatibility: older server builds expect "mouth" only.
+                        writer.append("\r\n--").append(boundary).append("\r\n");
+                        writer.append(
+                                "Content-Disposition: form-data; name=\"mouth\"; filename=\"mouth-open.png\"")
+                                .append("\r\n");
+                        writer.append("Content-Type: image/png").append("\r\n\r\n");
+                        writer.flush();
+
+                        try (InputStream in = new FileInputStream(mouthOpenFile)) {
+                            byte[] buffer = new byte[8_192];
+                            int read;
+                            while ((read = in.read(buffer)) != -1) {
+                                out.write(buffer, 0, read);
+                            }
+                        }
+                    }
+                    if (mouthCloseFile != null) {
+                        writer.append("\r\n--").append(boundary).append("\r\n");
+                        writer.append(
+                                "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"")
+                                .append("\r\n");
+                        writer.append("Content-Type: image/png").append("\r\n\r\n");
+                        writer.flush();
+
+                        try (InputStream in = new FileInputStream(mouthCloseFile)) {
+                            byte[] buffer = new byte[8_192];
+                            int read;
+                            while ((read = in.read(buffer)) != -1) {
+                                out.write(buffer, 0, read);
+                            }
+                        }
+                    }
+
                     out.flush();
                     writer.append("\r\n--").append(boundary).append("--").append("\r\n");
                     writer.flush();
                 }
 
                 int code = responseCode(connection);
-                String body = readBody(connection);
+                String body = readBody(connection, code);
                 ModLog.trace("Upload response: code={}, body={}", code, bodyPreview(body));
                 if (code / 100 != 2) {
-                    listener.onDone(false, body == null || body.isBlank() ? ("HTTP " + code) : body);
+                    listener.onDone(false, httpErrorMessage(body, code));
                     ModLog.warn("Upload failed: code={}, message={}", code, bodyPreview(body));
                     return;
                 }
@@ -202,25 +257,42 @@ public final class ServerApiClient {
             } catch (Exception exception) {
                 ModLog.error("Upload failed for file '" + safeFileName(file) + "'", exception);
                 listener.onDone(false, messageOrDefault(exception));
+            } finally {
+                disconnectQuietly(connection);
             }
         }, EXECUTOR);
     }
 
     public static void selectSkin(UUID playerUuid, String skinIdOrUrl) {
+        selectSkin(playerUuid, skinIdOrUrl, null);
+    }
+
+    public static void selectSkin(UUID playerUuid, String skinIdOrUrl, Boolean slim) {
         if (playerUuid == null || skinIdOrUrl == null || skinIdOrUrl.isBlank()) {
             ModLog.trace("Select skin skipped: uuid or skin value missing");
             return;
         }
         CompletableFuture.runAsync(() -> {
+            HttpURLConnection connection = null;
             try {
-                ModLog.debug("Selecting skin: uuid={}, value={}", playerUuid, skinIdOrUrl);
-                HttpURLConnection connection = open("POST", pathSelect, "application/json; charset=utf-8");
-                String body = "{\"uuid\":\"" + playerUuid + "\",\"skin\":\"" + escapeJson(skinIdOrUrl) + "\"}";
+                ModLog.debug("Selecting skin: uuid={}, value={}, slim={}", playerUuid, skinIdOrUrl, slim);
+                connection = open("POST", PATH_SELECT, "application/json; charset=utf-8");
+                StringBuilder bodyBuilder = new StringBuilder(128)
+                        .append("{\"uuid\":\"")
+                        .append(playerUuid)
+                        .append("\",\"skin\":\"")
+                        .append(escapeJson(skinIdOrUrl))
+                        .append("\"");
+                if (slim != null) {
+                    bodyBuilder.append(",\"slim\":").append(slim.booleanValue());
+                }
+                bodyBuilder.append('}');
+                String body = bodyBuilder.toString();
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(body.getBytes(StandardCharsets.UTF_8));
                 }
                 int code = responseCode(connection);
-                String responseBody = readBody(connection);
+                String responseBody = readBody(connection, code);
                 if (code / 100 != 2) {
                     ModLog.warn("Select skin failed: code={}, body={}", code, bodyPreview(responseBody));
                 } else {
@@ -229,8 +301,68 @@ public final class ServerApiClient {
                 }
             } catch (Exception exception) {
                 ModLog.error("Select skin request failed for uuid=" + playerUuid, exception);
+            } finally {
+                disconnectQuietly(connection);
             }
         }, EXECUTOR);
+    }
+
+    public static void clearSelectionAsync(UUID playerUuid, String clearMode, Consumer<ClearResult> callback) {
+        String mode = normalizeClearMode(clearMode);
+        if (playerUuid == null || mode == null) {
+            publishClearResult(callback,
+                    new ClearResult(false, false, mode == null ? "" : mode, "Invalid clear request"));
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            publishClearResult(callback, sendClearSelection(playerUuid, mode));
+        }, EXECUTOR);
+    }
+
+    private static ClearResult sendClearSelection(UUID playerUuid, String mode) {
+        HttpURLConnection connection = null;
+        try {
+            connection = open("POST", PATH_SELECT, "application/json; charset=utf-8");
+            String body = "{\"uuid\":\"" + playerUuid + "\",\"clear\":\"" + mode + "\"}";
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(body.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int code = responseCode(connection);
+            String responseBody = readBody(connection, code);
+            if (code / 100 != 2) {
+                String message = httpErrorMessage(responseBody, code);
+                ModLog.warn("Clear selection failed: uuid={}, mode={}, code={}, body={}",
+                        playerUuid, mode, code, bodyPreview(responseBody));
+                return new ClearResult(false, false, mode, message);
+            }
+
+            if (!hasClearAck(responseBody)) {
+                ModLog.warn("Clear selection response missing clear ack fields: uuid={}, mode={}, body={}",
+                        playerUuid, mode, bodyPreview(responseBody));
+                return new ClearResult(false, false, mode,
+                        "Server API does not support Clear action yet. Rebuild and restart NewServer.");
+            }
+
+            invalidateSelectedCache(playerUuid);
+            boolean changed = jsonBoolean(responseBody, "changed", true);
+            String cleared = firstNonBlank(jsonString(responseBody, "cleared"), mode);
+            ModLog.debug("Clear selection ok: uuid={}, mode={}, changed={}", playerUuid, cleared, changed);
+            return new ClearResult(true, changed, cleared, responseBody);
+        } catch (Exception exception) {
+            ModLog.error("Clear selection request failed for uuid=" + playerUuid + ", mode=" + mode, exception);
+            return new ClearResult(false, false, mode, messageOrDefault(exception));
+        } finally {
+            disconnectQuietly(connection);
+        }
+    }
+
+    private static boolean hasClearAck(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return false;
+        }
+        return responseBody.contains("\"cleared\"") || responseBody.contains("\"changed\"");
     }
 
     public static CompletableFuture<SelectedSkin> fetchSelectedAsync(UUID playerUuid) {
@@ -241,7 +373,7 @@ public final class ServerApiClient {
 
         long now = System.currentTimeMillis();
         CachedSelected cached = SELECTED_CACHE.get(playerUuid);
-        if (cached != null && (now - cached.cachedAtMs) <= selectedCacheTtlMs) {
+        if (cached != null && (now - cached.cachedAtMs) <= SELECTED_CACHE_TTL_MS) {
             ModLog.trace("Fetch selected cache hit: {}", playerUuid);
             return CompletableFuture.completedFuture(cached.value);
         }
@@ -253,14 +385,16 @@ public final class ServerApiClient {
         }
 
         CompletableFuture<SelectedSkin> created = CompletableFuture.supplyAsync(() -> {
+            HttpURLConnection connection = null;
             try {
-                String requestPath = pathSelected + (pathSelected.contains("?") ? "&uuid=" : "?uuid=") + playerUuid;
+                String requestPath = PATH_SELECTED + (PATH_SELECTED.contains("?") ? "&uuid=" : "?uuid=") + playerUuid;
                 ModLog.trace("Fetch selected request: {}", requestPath);
-                HttpURLConnection connection = open("GET", requestPath, null);
+                connection = open("GET", requestPath, null);
                 int code = responseCode(connection);
-                String body = readBody(connection);
+                String body = readBody(connection, code);
                 if (code / 100 != 2) {
-                    ModLog.warn("Fetch selected failed: uuid={}, code={}, body={}", playerUuid, code, bodyPreview(body));
+                    ModLog.warn("Fetch selected failed: uuid={}, code={}, body={}", playerUuid, code,
+                            bodyPreview(body));
                     return null;
                 }
 
@@ -275,14 +409,25 @@ public final class ServerApiClient {
                     ModLog.trace("Fetch selected returned no URL for uuid={}", playerUuid);
                     return null;
                 }
+                String mouthOpenUrl = firstNonBlank(
+                        jsonString(body, "mouth_open_url"),
+                        jsonString(body, "mouthOpenUrl"),
+                        jsonString(body, "mouth_url"),
+                        jsonString(body, "mouthUrl"));
+                String mouthCloseUrl = firstNonBlank(
+                        jsonString(body, "mouth_close_url"),
+                        jsonString(body, "mouthCloseUrl"));
                 boolean slim = jsonBoolean(body, "slim", false);
-                SelectedSkin selectedSkin = new SelectedSkin(url, slim);
+                SelectedSkin selectedSkin = new SelectedSkin(url, mouthOpenUrl, mouthCloseUrl, slim);
                 SELECTED_CACHE.put(playerUuid, new CachedSelected(selectedSkin, System.currentTimeMillis()));
-                ModLog.trace("Fetch selected ok: uuid={}, slim={}, url={}", playerUuid, slim, url);
+                ModLog.trace("Fetch selected ok: uuid={}, slim={}, url={}, mouthOpen={}, mouthClose={}",
+                        playerUuid, slim, url, mouthOpenUrl, mouthCloseUrl);
                 return selectedSkin;
             } catch (Exception exception) {
                 ModLog.error("Fetch selected failed for uuid=" + playerUuid, exception);
                 return null;
+            } finally {
+                disconnectQuietly(connection);
             }
         }, EXECUTOR).whenComplete((ignored, throwable) -> SELECTED_IN_FLIGHT.remove(playerUuid));
 
@@ -290,11 +435,12 @@ public final class ServerApiClient {
         return existing != null ? existing : created;
     }
 
-    public static CompletableFuture<NativeImageBackedTexture> downloadTextureAsync(String urlOrPath) {
+    public static CompletableFuture<NativeImage> downloadImageAsync(String urlOrPath) {
         return CompletableFuture.supplyAsync(() -> {
+            HttpURLConnection connection = null;
             try {
                 ModLog.trace("Downloading texture from {}", urlOrPath);
-                HttpURLConnection connection = open("GET", urlOrPath, null);
+                connection = open("GET", urlOrPath, null);
                 int code = responseCode(connection);
                 if (code / 100 != 2) {
                     ModLog.warn("Texture download failed: code={}, url={}", code, urlOrPath);
@@ -316,26 +462,40 @@ public final class ServerApiClient {
                 try (ByteArrayInputStream imageInput = new ByteArrayInputStream(bodyBytes)) {
                     NativeImage image = NativeImage.read(imageInput);
                     ModLog.trace("Texture downloaded: {}x{} from {}", image.getWidth(), image.getHeight(), urlOrPath);
-                    return new NativeImageBackedTexture(image);
+                    return image;
                 }
             } catch (Exception exception) {
                 ModLog.error("Texture download failed: " + urlOrPath, exception);
                 return null;
+            } finally {
+                disconnectQuietly(connection);
             }
         }, EXECUTOR);
+    }
+
+    public static CompletableFuture<NativeImageBackedTexture> downloadTextureAsync(String urlOrPath) {
+        return downloadImageAsync(urlOrPath).thenApply(image -> {
+            if (image == null) {
+                return null;
+            }
+            NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
+            texture.setFilter(false, false);
+            return texture;
+        });
     }
 
     public static CompletableFuture<Boolean> pingAsyncOk() {
         CachedPing ping = cachedPing;
         long now = System.currentTimeMillis();
-        if (ping != null && (now - ping.cachedAtMs) <= pingCacheTtlMs) {
+        if (ping != null && (now - ping.cachedAtMs) <= PING_CACHE_TTL_MS) {
             return CompletableFuture.completedFuture(ping.ok);
         }
 
         return CompletableFuture.supplyAsync(() -> {
+            HttpURLConnection connection = null;
             try {
                 ModLog.trace("Cloud ping start");
-                HttpURLConnection connection = open("GET", "/", null);
+                connection = open("GET", "/", null);
                 boolean ok = responseCode(connection) / 100 == 2;
                 cachedPing = new CachedPing(ok, System.currentTimeMillis());
                 ModLog.debug("Cloud ping result={}", ok);
@@ -343,6 +503,8 @@ public final class ServerApiClient {
             } catch (Exception exception) {
                 ModLog.warn("Cloud ping failed: {}", exception.getMessage());
                 return false;
+            } finally {
+                disconnectQuietly(connection);
             }
         }, EXECUTOR);
     }
@@ -351,11 +513,11 @@ public final class ServerApiClient {
         if (id == null || id.isBlank()) {
             return null;
         }
-        String fileName = id.endsWith(".png") ? id : (id + ".png");
-        return join(baseUrl, pathPublic + fileName);
+        String cleanId = id.endsWith(".png") ? id.substring(0, id.length() - 4) : id;
+        return join(BASE_URL, PATH_PUBLIC + cleanId + "/skin.png");
     }
 
-    public static void startSse(Consumer<UpdateEvent> consumer) {
+    public static synchronized void startSse(Consumer<UpdateEvent> consumer) {
         if (sseThread != null) {
             ModLog.trace("SSE start skipped: already running");
             return;
@@ -367,11 +529,11 @@ public final class ServerApiClient {
                 attempt++;
                 HttpURLConnection connection = null;
                 try {
-                    ModLog.debug("SSE connect attempt {} -> {}", attempt, pathEvents);
-                    connection = openSse(pathEvents);
+                    ModLog.debug("SSE connect attempt {} -> {}", attempt, PATH_EVENTS);
+                    connection = openSse(PATH_EVENTS);
                     int code = responseCode(connection);
                     if (code / 100 != 2) {
-                        String body = readBody(connection);
+                        String body = readBody(connection, code);
                         ModLog.warn("SSE connect failed: code={}, body={}", code, bodyPreview(body));
                         sleepQuietly(1_500L);
                         continue;
@@ -388,8 +550,9 @@ public final class ServerApiClient {
                             String payload = line.substring(5).trim();
                             UpdateEvent event = parseUpdateEvent(payload);
                             if (event != null && event.uuid != null && consumer != null) {
-                                ModLog.trace("SSE event: uuid={}, id={}, slim={}, url={}",
-                                        event.uuid, event.id, event.slim, event.url);
+                                ModLog.trace("SSE event: uuid={}, id={}, slim={}, url={}, mouthOpen={}, mouthClose={}",
+                                        event.uuid, event.id, event.slim, event.url,
+                                        event.mouthOpenUrl, event.mouthCloseUrl);
                                 consumer.accept(event);
                             } else {
                                 ModLog.trace("SSE event skipped: {}", bodyPreview(payload));
@@ -406,9 +569,7 @@ public final class ServerApiClient {
                         sleepQuietly(1_500L);
                     }
                 } finally {
-                    if (connection != null) {
-                        connection.disconnect();
-                    }
+                    disconnectQuietly(connection);
                 }
             }
             ModLog.info("SSE thread stopped");
@@ -418,7 +579,7 @@ public final class ServerApiClient {
         ModLog.debug("SSE thread started");
     }
 
-    public static void stopSse() {
+    public static synchronized void stopSse() {
         sseStop = true;
         Thread thread = sseThread;
         sseThread = null;
@@ -442,8 +603,16 @@ public final class ServerApiClient {
             UUID uuid = parseUuidFlexible(uuidString);
             String id = jsonString(json, "id");
             String url = jsonString(json, "url");
+            String mouthOpenUrl = firstNonBlank(
+                    jsonString(json, "mouth_open_url"),
+                    jsonString(json, "mouthOpenUrl"),
+                    jsonString(json, "mouth_url"),
+                    jsonString(json, "mouthUrl"));
+            String mouthCloseUrl = firstNonBlank(
+                    jsonString(json, "mouth_close_url"),
+                    jsonString(json, "mouthCloseUrl"));
             Boolean slim = json.contains("\"slim\"") ? jsonBoolean(json, "slim", false) : null;
-            return new UpdateEvent(uuid, id, url, slim);
+            return new UpdateEvent(uuid, id, url, mouthOpenUrl, mouthCloseUrl, slim);
         } catch (Exception exception) {
             ModLog.trace("SSE payload parse failed: {}", bodyPreview(json));
             ModLog.trace("SSE parse exception", exception);
@@ -477,12 +646,12 @@ public final class ServerApiClient {
     }
 
     private static HttpURLConnection open(String method, String pathOrUrl, String contentType) throws IOException {
-        String requestUrl = isHttp(pathOrUrl) ? pathOrUrl : join(baseUrl, pathOrUrl);
+        String requestUrl = isHttp(pathOrUrl) ? pathOrUrl : join(BASE_URL, pathOrUrl);
         ModLog.trace("HTTP {} {}", method, requestUrl);
         HttpURLConnection connection = (HttpURLConnection) new URL(requestUrl).openConnection();
         connection.setInstanceFollowRedirects(true);
-        connection.setConnectTimeout(timeoutMs);
-        connection.setReadTimeout(timeoutMs);
+        connection.setConnectTimeout(TIMEOUT_MS);
+        connection.setReadTimeout(TIMEOUT_MS);
         connection.setRequestMethod(method);
         connection.setRequestProperty("User-Agent", "catskinc-remake/ServerApiClient");
         if (contentType != null) {
@@ -491,7 +660,6 @@ public final class ServerApiClient {
         if (authToken != null && !authToken.isBlank()) {
             connection.setRequestProperty("Authorization", "Bearer " + authToken);
         }
-        applyRequestSignature(connection, method);
         if ("POST".equals(method) || "PUT".equals(method)) {
             connection.setDoOutput(true);
         }
@@ -531,175 +699,12 @@ public final class ServerApiClient {
         return value != null && (value.startsWith("http://") || value.startsWith("https://"));
     }
 
-    private static String resolveSecret(String preferred, String envKey, String propertyKey) {
-        if (preferred != null && !preferred.isBlank()) {
-            return preferred.trim();
-        }
-        String env = System.getenv(envKey);
-        if (env != null && !env.isBlank()) {
-            return env.trim();
-        }
-        String property = System.getProperty(propertyKey);
-        if (property != null && !property.isBlank()) {
-            return property.trim();
-        }
-        return null;
-    }
-
-    private static String resolveTlsPin(String preferred) {
-        String candidate = preferred;
-        if (candidate == null || candidate.isBlank()) {
-            candidate = System.getenv("CATSKINC_TLS_PIN_SHA256");
-        }
-        if ((candidate == null || candidate.isBlank())) {
-            candidate = System.getProperty("catskinc.tlsPinSha256");
-        }
-        if (candidate == null) {
-            return null;
-        }
-        String trimmed = candidate.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        if (trimmed.regionMatches(true, 0, "sha256/", 0, 7)) {
-            trimmed = trimmed.substring(7);
-        }
-        trimmed = trimmed.replace(":", "").trim().toLowerCase();
-        if (trimmed.length() != 64) {
-            return null;
-        }
-        for (int i = 0; i < trimmed.length(); i++) {
-            char c = trimmed.charAt(i);
-            boolean hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-            if (!hex) {
-                return null;
-            }
-        }
-        return trimmed;
-    }
-
     private static int responseCode(HttpURLConnection connection) throws IOException {
-        int code = connection.getResponseCode();
-        verifyTlsPin(connection);
-        return code;
+        return connection.getResponseCode();
     }
 
-    private static void applyRequestSignature(HttpURLConnection connection, String method) throws IOException {
-        String signingKey = requestSigningKey;
-        if (signingKey == null || signingKey.isBlank()) {
-            return;
-        }
-        URL requestUrl = connection.getURL();
-        if (!isBaseServerUrl(requestUrl)) {
-            return;
-        }
-
-        long timestamp = System.currentTimeMillis() / 1000L;
-        String nonce = randomNonce();
-        String target = canonicalTarget(requestUrl);
-        String payload = method + "\n" + target + "\n" + timestamp + "\n" + nonce;
-        String signature = hmacSha256Hex(signingKey, payload);
-
-        connection.setRequestProperty(HEADER_SIGNATURE_TIMESTAMP, Long.toString(timestamp));
-        connection.setRequestProperty(HEADER_SIGNATURE_NONCE, nonce);
-        connection.setRequestProperty(HEADER_SIGNATURE, signature);
-        ModLog.trace("Signed request {} {}", method, target);
-    }
-
-    private static void verifyTlsPin(HttpURLConnection connection) throws IOException {
-        String pin = tlsPinSha256;
-        if (pin == null || pin.isBlank()) {
-            return;
-        }
-        if (!(connection instanceof HttpsURLConnection httpsConnection)) {
-            throw new IOException("TLS pin is configured but connection is not HTTPS");
-        }
-        try {
-            Certificate[] certificates = httpsConnection.getServerCertificates();
-            if (certificates == null || certificates.length == 0) {
-                throw new SSLPeerUnverifiedException("No server certificates");
-            }
-            if (!(certificates[0] instanceof X509Certificate cert)) {
-                throw new SSLPeerUnverifiedException("Unsupported certificate type");
-            }
-            String actualPin = sha256Hex(cert.getPublicKey().getEncoded());
-            if (!pin.equalsIgnoreCase(actualPin)) {
-                throw new SSLPeerUnverifiedException("TLS pin mismatch");
-            }
-        } catch (SSLPeerUnverifiedException exception) {
-            throw exception;
-        } catch (Exception exception) {
-            throw new IOException("TLS pin verification failed", exception);
-        }
-    }
-
-    private static boolean isBaseServerUrl(URL url) {
-        if (url == null) {
-            return false;
-        }
-        try {
-            URI base = URI.create(baseUrl);
-            if (base.getHost() == null || url.getHost() == null) {
-                return false;
-            }
-            if (!base.getHost().equalsIgnoreCase(url.getHost())) {
-                return false;
-            }
-
-            int basePort = normalizePort(base.getScheme(), base.getPort());
-            int urlPort = normalizePort(url.getProtocol(), url.getPort());
-            return basePort == urlPort;
-        } catch (Exception exception) {
-            return false;
-        }
-    }
-
-    private static int normalizePort(String scheme, int explicitPort) {
-        if (explicitPort > 0) {
-            return explicitPort;
-        }
-        if ("https".equalsIgnoreCase(scheme)) {
-            return 443;
-        }
-        if ("http".equalsIgnoreCase(scheme)) {
-            return 80;
-        }
-        return -1;
-    }
-
-    private static String canonicalTarget(URL url) {
-        if (url == null) {
-            return "/";
-        }
-        String path = url.getPath();
-        if (path == null || path.isBlank()) {
-            path = "/";
-        }
-        String query = url.getQuery();
-        if (query == null || query.isBlank()) {
-            return path;
-        }
-        return path + "?" + query;
-    }
-
-    private static String randomNonce() {
-        byte[] nonce = new byte[18];
-        SECURE_RANDOM.nextBytes(nonce);
-        return toHex(nonce);
-    }
-
-    private static String hmacSha256Hex(String key, String payload) throws IOException {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            return toHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch (Exception exception) {
-            throw new IOException("Failed to sign request", exception);
-        }
-    }
-
-    private static String readBody(HttpURLConnection connection) {
-        try (InputStream in = responseCode(connection) / 100 == 2
+    /* package-private for testing */ static String readBody(HttpURLConnection connection, int code) {
+        try (InputStream in = code / 100 == 2
                 ? connection.getInputStream()
                 : connection.getErrorStream()) {
             if (in == null) {
@@ -710,6 +715,78 @@ public final class ServerApiClient {
             ModLog.trace("Failed reading HTTP body: {}", exception.getMessage());
             return null;
         }
+    }
+
+    private static void disconnectQuietly(HttpURLConnection connection) {
+        if (connection != null) {
+            try {
+                connection.disconnect();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    static long estimateMultipartOverhead(
+            String boundary,
+            UUID playerUuid,
+            boolean slim,
+            boolean includeMouthOpen,
+            boolean includeMouthClose,
+            boolean includeLegacyMouth) {
+        long overhead = 0;
+        // uuid part
+        if (playerUuid != null) {
+            overhead += ("--" + boundary + "\r\n").length();
+            overhead += "Content-Disposition: form-data; name=\"uuid\"\r\n\r\n".length();
+            overhead += (playerUuid.toString() + "\r\n").length();
+        }
+        // slim part
+        overhead += ("--" + boundary + "\r\n").length();
+        overhead += "Content-Disposition: form-data; name=\"slim\"\r\n\r\n".length();
+        overhead += (Boolean.toString(slim) + "\r\n").length();
+        // file part header
+        overhead += ("--" + boundary + "\r\n").length();
+        overhead += "Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"\r\n".length();
+        overhead += "Content-Type: image/png\r\n\r\n".length();
+        if (includeMouthOpen) {
+            overhead += "\r\n".length();
+            overhead += ("--" + boundary + "\r\n").length();
+            overhead +=
+                    "Content-Disposition: form-data; name=\"mouth_open\"; filename=\"mouth-open.png\"\r\n".length();
+            overhead += "Content-Type: image/png\r\n\r\n".length();
+        }
+        if (includeLegacyMouth) {
+            overhead += "\r\n".length();
+            overhead += ("--" + boundary + "\r\n").length();
+            overhead += "Content-Disposition: form-data; name=\"mouth\"; filename=\"mouth-open.png\"\r\n".length();
+            overhead += "Content-Type: image/png\r\n\r\n".length();
+        }
+        if (includeMouthClose) {
+            overhead += "\r\n".length();
+            overhead += ("--" + boundary + "\r\n").length();
+            overhead +=
+                    "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"\r\n".length();
+            overhead += "Content-Type: image/png\r\n\r\n".length();
+        }
+        // closing boundary
+        overhead += ("\r\n--" + boundary + "--\r\n").length();
+        return overhead;
+    }
+
+    /**
+     * Resets all internal state for testing purposes.
+     * This method is package-private and should only be used in tests.
+     */
+    /**
+     * Resets all internal state for testing purposes.
+     * This method is package-private and should only be used in tests.
+     */
+    static void resetForTesting() {
+        authToken = null;
+        SELECTED_CACHE.clear();
+        SELECTED_IN_FLIGHT.clear();
+        cachedPing = null;
+        stopSse();
     }
 
     private static byte[] readAllBytes(InputStream inputStream) throws IOException {
@@ -753,6 +830,59 @@ public final class ServerApiClient {
             return cleaned;
         }
         return cleaned.substring(0, BODY_PREVIEW_LIMIT) + "...(" + cleaned.length() + " chars)";
+    }
+
+    private static String httpErrorMessage(String body, int code) {
+        String parsed = firstNonBlank(
+                jsonString(body, "error"),
+                jsonString(body, "message"),
+                jsonString(body, "detail"));
+        if (parsed != null && !parsed.isBlank()) {
+            return parsed;
+        }
+        if (body == null || body.isBlank()) {
+            return "HTTP " + code;
+        }
+        String trimmed = body.trim();
+        if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
+            return "HTTP " + code;
+        }
+        return trimmed;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null || values.length == 0) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private static String normalizeClearMode(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "all" -> "all";
+            case "skin" -> "skin";
+            case "mouth" -> "mouth";
+            default -> null;
+        };
+    }
+
+    private static void publishClearResult(Consumer<ClearResult> callback, ClearResult result) {
+        if (callback == null) {
+            return;
+        }
+        try {
+            callback.accept(result);
+        } catch (Exception exception) {
+            ModLog.warn("Clear callback failed: {}", exception.getMessage());
+        }
     }
 
     private static String jsonString(String body, String key) {
@@ -901,4 +1031,3 @@ public final class ServerApiClient {
     private record CachedPing(boolean ok, long cachedAtMs) {
     }
 }
-

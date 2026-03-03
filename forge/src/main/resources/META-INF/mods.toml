@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[47,)"
+loaderVersion = "${forge_loader_range}"
 #issueTrackerURL = ""
 license = "MIT"
 
@@ -16,20 +16,48 @@ description = '''
 [[dependencies.catskinc_remake]]
 modId = "forge"
 mandatory = true
-versionRange = "[47,)"
+versionRange = "${forge_loader_range}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.catskinc_remake]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[1.20.1,)"
+versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.catskinc_remake]]
 modId = "architectury"
 mandatory = true
-versionRange = "[9.2.14,)"
+versionRange = "${architectury_version_range}"
 ordering = "AFTER"
 side = "BOTH"
+
+[[dependencies.catskinc_remake]]
+modId = "voicechat"
+mandatory = false
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.catskinc_remake]]
+modId = "plasmovoice"
+mandatory = false
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.catskinc_remake]]
+modId = "figura"
+mandatory = false
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.catskinc_remake]]
+modId = "emotecraft"
+mandatory = false
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"

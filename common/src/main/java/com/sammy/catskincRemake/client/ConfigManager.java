@@ -37,6 +37,12 @@ public final class ConfigManager {
         if (loaded == null) {
             loaded = new ClientConfig();
             ModLog.debug("Using default client config");
+        } else if (loaded.voiceAmplitudeThreshold == 700) {
+            // Migrate legacy default to the current baseline for better voice detection.
+            loaded.voiceAmplitudeThreshold = 180;
+        }
+        if (loaded.voiceHoldMs == 260L) {
+            loaded.voiceHoldMs = 420L;
         }
         loaded.sanitize();
         config = loaded;

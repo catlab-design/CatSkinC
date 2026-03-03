@@ -4,8 +4,39 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
 }
 
+def requiredProp = { String key, String fallback = null ->
+    def value = findProperty(key)?.toString()
+    if (value != null && !value.isBlank()) {
+        return value
+    }
+    if (fallback != null) {
+        return fallback
+    }
+    throw new GradleException("Missing required Gradle property '${key}'")
+}
+
+ext.targetMc = "1.20.1"
+ext.selectedJavaVersion = Integer.parseInt(requiredProp("java_version", "17"))
+ext.selectedMinecraftVersion = requiredProp("minecraft_version", "1.20.1")
+ext.selectedYarnMappings = requiredProp("yarn_mappings")
+ext.selectedArchitecturyVersion = requiredProp("architectury_api_version")
+ext.selectedFabricLoaderVersion = requiredProp("fabric_loader_version")
+ext.selectedFabricApiVersion = requiredProp("fabric_api_version")
+ext.selectedForgeVersion = requiredProp("forge_version")
+ext.selectedVoicechatModrinthVersion = requiredProp("voicechat_modrinth_version")
+ext.selectedPlasmoVoiceModrinthVersion = requiredProp("plasmo_voice_modrinth_version")
+def forgeLoaderToken = ext.selectedForgeVersion.tokenize('-').size() > 1
+        ? ext.selectedForgeVersion.tokenize('-')[1]
+        : ""
+if (forgeLoaderToken.isBlank()) {
+    throw new GradleException("Could not extract Forge loader version from forge_version='${ext.selectedForgeVersion}'")
+}
+ext.selectedForgeLoaderMajor = forgeLoaderToken.tokenize('.')[0]
+
+println "CatSkinC profile: minecraft=${ext.selectedMinecraftVersion}, java=${ext.selectedJavaVersion}"
+
 architectury {
-    minecraft = project.minecraft_version
+    minecraft = rootProject.ext.selectedMinecraftVersion
 }
 
 allprojects {
@@ -24,23 +55,33 @@ subprojects {
     }
 
     repositories {
+        mavenCentral()
         maven { url "https://maven.shedaniel.me/" }
         maven { url "https://maven.terraformersmc.com/releases/" }
+        maven { url "https://maven.maxhenkel.de/repository/public" }
+        maven { url "https://repo.plasmoverse.com/releases" }
+        maven {
+            url "https://api.modrinth.com/maven"
+            content {
+                includeGroup "maven.modrinth"
+            }
+        }
     }
 
     dependencies {
-        minecraft "com.mojang:minecraft:$rootProject.minecraft_version"
-        mappings "net.fabricmc:yarn:$rootProject.yarn_mappings:v2"
+        minecraft "com.mojang:minecraft:$rootProject.ext.selectedMinecraftVersion"
+        mappings "net.fabricmc:yarn:$rootProject.ext.selectedYarnMappings:v2"
     }
 
     java {
         withSourcesJar()
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        def selectedJava = JavaVersion.toVersion(rootProject.ext.selectedJavaVersion)
+        sourceCompatibility = selectedJava
+        targetCompatibility = selectedJava
     }
 
     tasks.withType(JavaCompile).configureEach {
-        options.release = 17
+        options.release = rootProject.ext.selectedJavaVersion
         options.encoding = "UTF-8"
         if (hardenBuild) {
             options.debug = false

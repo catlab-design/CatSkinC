@@ -2,11 +2,11 @@ package com.sammy.catskincRemake.client;
 
 import com.sammy.catskincRemake.CatskincRemake;
 import net.minecraft.util.Identifier;
-
 import java.lang.reflect.Method;
 
 public final class Identifiers {
-    private static final Method IDENTIFIER_OF = findOf();
+    private static final Method IDENTIFIER_OF = findMethod("of", String.class, String.class);
+    private static final Method IDENTIFIER_TRY_PARSE = findMethod("tryParse", String.class);
 
     private Identifiers() {
     }
@@ -22,12 +22,25 @@ public final class Identifiers {
             } catch (Exception ignored) {
             }
         }
-        return new Identifier(namespace, path);
+        return parse(namespace + ":" + path);
     }
 
-    private static Method findOf() {
+    public static Identifier parse(String value) {
+        if (IDENTIFIER_TRY_PARSE != null) {
+            try {
+                Identifier identifier = (Identifier) IDENTIFIER_TRY_PARSE.invoke(null, value);
+                if (identifier != null) {
+                    return identifier;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        throw new IllegalArgumentException("Invalid identifier: " + value);
+    }
+
+    private static Method findMethod(String name, Class<?>... args) {
         try {
-            return Identifier.class.getMethod("of", String.class, String.class);
+            return Identifier.class.getMethod(name, args);
         } catch (Exception ignored) {
             return null;
         }

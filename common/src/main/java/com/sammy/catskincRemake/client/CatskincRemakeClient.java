@@ -26,13 +26,14 @@ public final class CatskincRemakeClient {
 
         ConfigManager.load();
         applyConfig();
+        VoiceStateNetworkClient.init();
+        VoiceIntegrationBootstrap.init();
 
         openUiKey = new KeyBinding(
                 "key.catskinc-remake.open_ui",
                 InputUtil.Type.KEYSYM,
                 ConfigManager.get().openUiKey,
-                "key.categories.catskinc-remake"
-        );
+                "key.categories.catskinc-remake");
         KeyMappingRegistry.register(openUiKey);
         ModLog.debug("Registered keybinding with keycode={}", ConfigManager.get().openUiKey);
 
@@ -44,8 +45,13 @@ public final class CatskincRemakeClient {
 
             if (client.world == null) {
                 tickCounter = 0;
+                VoiceActivityTracker.tick();
+                VoiceIntegrationBootstrap.tick();
                 return;
             }
+
+            VoiceActivityTracker.tick();
+            VoiceIntegrationBootstrap.tick();
 
             ClientConfig config = ConfigManager.get();
             tickCounter++;
@@ -90,6 +96,7 @@ public final class CatskincRemakeClient {
                     SkinManagerClient.clearAll();
                     SkinOverrideStore.clearAll();
                     ServerApiClient.stopSse();
+                    VoiceIntegrationBootstrap.shutdown();
                 });
             }
         });
@@ -106,10 +113,12 @@ public final class CatskincRemakeClient {
     public static void applyConfig() {
         ClientConfig config = ConfigManager.get();
         ModLog.configure(config.debugLogging, config.traceLogging);
-        ModLog.debug("Applying config: refreshIntervalMs={}, ensureIntervalTicks={}, ensureLimitPerPass={}, uiScale={}, timeoutMs={}",
-                config.refreshIntervalMs, config.ensureIntervalTicks, config.ensureLimitPerPass, config.uiScale, config.timeoutMs);
+        ModLog.debug(
+                "Applying config: refreshIntervalMs={}, ensureIntervalTicks={}, ensureLimitPerPass={}, uiScale={}, voiceThreshold={}, voiceHoldMs={}",
+                config.refreshIntervalMs, config.ensureIntervalTicks, config.ensureLimitPerPass, config.uiScale,
+                config.voiceAmplitudeThreshold, config.voiceHoldMs);
         SkinManagerClient.setRefreshIntervalMs(config.refreshIntervalMs);
-        ServerApiClient.reloadFromConfig();
+        VoiceActivityTracker.configure(config.voiceAmplitudeThreshold, config.voiceHoldMs);
 
         if (openUiKey != null) {
             openUiKey.setBoundKey(InputUtil.Type.KEYSYM.createFromCode(config.openUiKey));
@@ -120,6 +129,7 @@ public final class CatskincRemakeClient {
 
     private static void handleJoin(MinecraftClient client) {
         try {
+            VoiceIntegrationBootstrap.init();
             ModLog.debug("Handling join flow: start SSE + initial sync");
             ServerApiClient.startSse(event -> {
                 if (event == null || event.uuid == null) {
@@ -140,13 +150,11 @@ public final class CatskincRemakeClient {
 
             Toasts.ConnectionToast toast = Toasts.connection(
                     Text.translatable("title.skin_cloud"),
-                    Text.translatable("toast.cloud.checking")
-            );
-            ServerApiClient.pingAsyncOk().thenAccept(ok -> client.execute(() ->
-                    toast.complete(Boolean.TRUE.equals(ok),
-                            Text.translatable(Boolean.TRUE.equals(ok)
-                                    ? "toast.cloud.connected"
-                                    : "toast.cloud.failed").getString())));
+                    Text.translatable("toast.cloud.checking"));
+            ServerApiClient.pingAsyncOk().thenAccept(ok -> client.execute(() -> toast.complete(Boolean.TRUE.equals(ok),
+                    Text.translatable(Boolean.TRUE.equals(ok)
+                            ? "toast.cloud.connected"
+                            : "toast.cloud.failed").getString())));
         } catch (Exception exception) {
             ModLog.error("Join flow failed", exception);
         }
