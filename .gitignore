@@ -55,3 +55,5 @@ gradle-app.setting
 # Project-specific
 # Common now owns assets; old fabric asset mirror is excluded.
 fabric/src/main/resources/assets/
+
+tmp_decompile/

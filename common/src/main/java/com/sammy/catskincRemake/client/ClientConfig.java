@@ -10,6 +10,22 @@ public final class ClientConfig {
     public int voiceAmplitudeThreshold = 180;
     public long voiceHoldMs = 420L;
 
+    public String apiBaseUrl = "http://127.0.0.1:2555";
+    public String pathUpload = "/upload";
+    public String pathSelect = "/select";
+    public String pathSelected = "/selected";
+    public String pathPublic = "/public/";
+    public String pathEvents = "/events";
+    public int timeoutMs = 15_000;
+    public long selectedCacheTtlMs = 1_500L;
+    public long pingCacheTtlMs = 10_000L;
+    public boolean allowInsecureHttp = false;
+    public String requestSigningKey = "";
+    public String tlsPinSha256 = "";
+    public String allowedAssetHosts = "";
+    public int maxJsonBytes = 256 * 1024;
+    public int maxImageBytes = 8 * 1024 * 1024;
+
     public boolean debugLogging = false;
     public boolean traceLogging = false;
 
@@ -21,9 +37,56 @@ public final class ClientConfig {
         uiScale = clamp(uiScale, 0.6F, 1.75F);
         voiceAmplitudeThreshold = clamp(voiceAmplitudeThreshold, 10, 30_000);
         voiceHoldMs = clamp(voiceHoldMs, 60L, 2_000L);
+        apiBaseUrl = sanitizeBaseUrl(apiBaseUrl);
+        pathUpload = sanitizePath(pathUpload, "/upload");
+        pathSelect = sanitizePath(pathSelect, "/select");
+        pathSelected = sanitizePath(pathSelected, "/selected");
+        pathPublic = sanitizePath(pathPublic, "/public/");
+        if (!pathPublic.endsWith("/")) {
+            pathPublic = pathPublic + "/";
+        }
+        pathEvents = sanitizePath(pathEvents, "/events");
+        timeoutMs = clamp(timeoutMs, 1_000, 120_000);
+        selectedCacheTtlMs = clamp(selectedCacheTtlMs, 250L, 60_000L);
+        pingCacheTtlMs = clamp(pingCacheTtlMs, 1_000L, 120_000L);
+        requestSigningKey = sanitizeNullableString(requestSigningKey);
+        tlsPinSha256 = sanitizeNullableString(tlsPinSha256);
+        allowedAssetHosts = sanitizeNullableString(allowedAssetHosts);
+        maxJsonBytes = clamp(maxJsonBytes, 4 * 1024, 4 * 1024 * 1024);
+        maxImageBytes = clamp(maxImageBytes, 64 * 1024, 32 * 1024 * 1024);
         if (traceLogging) {
             debugLogging = true;
         }
+    }
+
+    private static String sanitizeBaseUrl(String value) {
+        String normalized = sanitizeNullableString(value);
+        if (normalized.isEmpty()) {
+            return "http://127.0.0.1:2555";
+        }
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        if (!(lower.startsWith("http://") || lower.startsWith("https://"))) {
+            return "http://127.0.0.1:2555";
+        }
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private static String sanitizePath(String value, String fallback) {
+        String normalized = sanitizeNullableString(value);
+        if (normalized.isEmpty()) {
+            normalized = fallback;
+        }
+        if (!normalized.startsWith("/")) {
+            normalized = "/" + normalized;
+        }
+        return normalized;
+    }
+
+    private static String sanitizeNullableString(String value) {
+        return value == null ? "" : value.trim();
     }
 
     /* package-private for testing */ static int clampInt(int value, int min, int max) {

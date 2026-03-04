@@ -8,6 +8,8 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.text.Text;
 
+import java.lang.management.ManagementFactory;
+
 public final class CatskincRemakeClient {
     private static KeyBinding openUiKey;
     private static int tickCounter;
@@ -112,7 +114,13 @@ public final class CatskincRemakeClient {
 
     public static void applyConfig() {
         ClientConfig config = ConfigManager.get();
-        ModLog.configure(config.debugLogging, config.traceLogging);
+        boolean devDiagnostics = isDevDiagnosticsDefaultOn();
+        boolean debugEnabled = config.debugLogging || devDiagnostics;
+        boolean traceEnabled = config.traceLogging || devDiagnostics;
+        ModLog.configure(debugEnabled, traceEnabled);
+        if (devDiagnostics) {
+            ModLog.debug("Dev diagnostics enabled (debugger/flag detected)");
+        }
         ModLog.debug(
                 "Applying config: refreshIntervalMs={}, ensureIntervalTicks={}, ensureLimitPerPass={}, uiScale={}, voiceThreshold={}, voiceHoldMs={}",
                 config.refreshIntervalMs, config.ensureIntervalTicks, config.ensureLimitPerPass, config.uiScale,
@@ -125,6 +133,22 @@ public final class CatskincRemakeClient {
             KeyBinding.updateKeysByCode();
             ModLog.trace("Updated keybinding to keycode={}", config.openUiKey);
         }
+    }
+
+    private static boolean isDevDiagnosticsDefaultOn() {
+        String env = System.getenv("CATSKINC_DEV");
+        if ("1".equals(env) || "true".equalsIgnoreCase(env) || Boolean.getBoolean("catskinc.dev")) {
+            return true;
+        }
+        try {
+            for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+                if (argument != null && argument.contains("-agentlib:jdwp")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     private static void handleJoin(MinecraftClient client) {

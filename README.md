@@ -89,6 +89,8 @@ Important values:
 - `allowInsecureHttp` (default `false`, allows only HTTPS except localhost)
 - `requestSigningKey` (optional shared HMAC key with server)
 - `tlsPinSha256` (optional SHA-256 public-key pin for HTTPS)
+- `allowedAssetHosts` (comma/semicolon-separated trusted host[:port] list for absolute texture URLs)
+- `maxJsonBytes`, `maxImageBytes` (response guard rails)
 - `debugLogging`, `traceLogging`
 
 Sensitive values can be injected without writing to config file:
@@ -96,6 +98,14 @@ Sensitive values can be injected without writing to config file:
 - `CATSKINC_REQUEST_SIGNING_KEY`
 - `CATSKINC_TLS_PIN_SHA256`
 - JVM properties `catskinc.requestSigningKey` / `catskinc.tlsPinSha256`
+
+Security request headers sent by client API calls:
+
+- `x-catskinc-request-id`
+- `x-catskinc-content-sha256`
+- `x-catskinc-timestamp`
+- `x-catskinc-nonce`
+- `x-catskinc-signature`
 
 ## Release Hardening
 

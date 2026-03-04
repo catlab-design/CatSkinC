@@ -1,5 +1,8 @@
 package com.sammy.catskincRemake.client;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 
@@ -7,7 +10,6 @@ import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -15,16 +17,27 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.security.cert.Certificate;
+import java.util.Base64;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import javax.net.ssl.HttpsURLConnection;
 
 public final class ServerApiClient {
     public interface ProgressListener {
@@ -76,17 +89,25 @@ public final class ServerApiClient {
     private static final ProgressListener NO_OP_PROGRESS = new ProgressListener() {
     };
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
+    private static final String DEFAULT_BASE_URL = "http://127.0.0.1:2555";
+    private static final String DEFAULT_PATH_UPLOAD = "/upload";
+    private static final String DEFAULT_PATH_SELECT = "/select";
+    private static final String DEFAULT_PATH_SELECTED = "/selected";
+    private static final String DEFAULT_PATH_PUBLIC = "/public/";
+    private static final String DEFAULT_PATH_EVENTS = "/events";
+    private static final int DEFAULT_TIMEOUT_MS = 15_000;
+    private static final long DEFAULT_SELECTED_CACHE_TTL_MS = 1_500L;
+    private static final long DEFAULT_PING_CACHE_TTL_MS = 10_000L;
+    private static final int DEFAULT_MAX_JSON_BYTES = 256 * 1024;
+    private static final int DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-    // private static final String BASE_URL = "https://storage-api.catskin.space";
-    private static final String BASE_URL = "http://127.0.0.1:2555";
-    private static final String PATH_UPLOAD = "/upload";
-    private static final String PATH_SELECT = "/select";
-    private static final String PATH_SELECTED = "/selected";
-    private static final String PATH_PUBLIC = "/public/";
-    private static final String PATH_EVENTS = "/events";
-    private static final int TIMEOUT_MS = 15_000;
-    private static final long SELECTED_CACHE_TTL_MS = 1_500L;
-    private static final long PING_CACHE_TTL_MS = 10_000L;
+    private static final String HEADER_REQUEST_ID = "x-catskinc-request-id";
+    private static final String HEADER_CONTENT_SHA256 = "x-catskinc-content-sha256";
+    private static final String HEADER_TIMESTAMP = "x-catskinc-timestamp";
+    private static final String HEADER_NONCE = "x-catskinc-nonce";
+    private static final String HEADER_SIGNATURE = "x-catskinc-signature";
+    private static final String SHA256_EMPTY_HEX =
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     private static volatile String authToken;
 
@@ -96,7 +117,90 @@ public final class ServerApiClient {
     private static final ConcurrentHashMap<UUID, CompletableFuture<SelectedSkin>> SELECTED_IN_FLIGHT = new ConcurrentHashMap<>();
     private static volatile CachedPing cachedPing;
 
+    private record RuntimeConfig(
+            String baseUrl,
+            String pathUpload,
+            String pathSelect,
+            String pathSelected,
+            String pathPublic,
+            String pathEvents,
+            int timeoutMs,
+            long selectedCacheTtlMs,
+            long pingCacheTtlMs,
+            boolean allowInsecureHttp,
+            String requestSigningKey,
+            String tlsPinSha256,
+            String apiHostPort,
+            Set<String> trustedAssetHostPorts,
+            int maxJsonBytes,
+            int maxImageBytes) {
+    }
+
     private ServerApiClient() {
+    }
+
+    private static RuntimeConfig runtimeConfig() {
+        ClientConfig config = ConfigManager.get();
+        config.sanitize();
+        String baseUrl = normalizeBaseUrl(config.apiBaseUrl);
+        URL parsedBase;
+        try {
+            parsedBase = parseUrl(baseUrl);
+        } catch (IOException exception) {
+            baseUrl = DEFAULT_BASE_URL;
+            try {
+                parsedBase = parseUrl(baseUrl);
+            } catch (IOException ignored) {
+                throw new IllegalStateException("Unable to parse default API base URL");
+            }
+        }
+        String apiHostPort = hostPortKey(parsedBase);
+
+        Set<String> trustedAssetHostPorts = new HashSet<>();
+        trustedAssetHostPorts.add(apiHostPort);
+        for (String part : config.allowedAssetHosts.split("[,;]")) {
+            String cleaned = part == null ? "" : part.trim().toLowerCase(Locale.ROOT);
+            if (!cleaned.isEmpty()) {
+                if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
+                    try {
+                        URL url = parseUrl(cleaned);
+                        trustedAssetHostPorts.add(hostPortKey(url));
+                        trustedAssetHostPorts.add(url.getHost().toLowerCase(Locale.ROOT));
+                    } catch (IOException ignored) {
+                        trustedAssetHostPorts.add(cleaned);
+                    }
+                } else {
+                    trustedAssetHostPorts.add(cleaned);
+                }
+            }
+        }
+
+        String requestSigningKey = firstNonBlank(
+                System.getProperty("catskinc.requestSigningKey"),
+                System.getenv("CATSKINC_REQUEST_SIGNING_KEY"),
+                config.requestSigningKey);
+        String tlsPinSha256 = firstNonBlank(
+                System.getProperty("catskinc.tlsPinSha256"),
+                System.getenv("CATSKINC_TLS_PIN_SHA256"),
+                config.tlsPinSha256).toLowerCase(Locale.ROOT);
+
+        return new RuntimeConfig(
+                baseUrl,
+                normalizePath(config.pathUpload, DEFAULT_PATH_UPLOAD),
+                normalizePath(config.pathSelect, DEFAULT_PATH_SELECT),
+                normalizePath(config.pathSelected, DEFAULT_PATH_SELECTED),
+                ensureTrailingSlash(normalizePath(config.pathPublic, DEFAULT_PATH_PUBLIC)),
+                normalizePath(config.pathEvents, DEFAULT_PATH_EVENTS),
+                clampInt(config.timeoutMs, 1_000, 120_000, DEFAULT_TIMEOUT_MS),
+                clampLong(config.selectedCacheTtlMs, 250L, 60_000L, DEFAULT_SELECTED_CACHE_TTL_MS),
+                clampLong(config.pingCacheTtlMs, 1_000L, 120_000L, DEFAULT_PING_CACHE_TTL_MS),
+                config.allowInsecureHttp,
+                requestSigningKey,
+                normalizePin(tlsPinSha256),
+                apiHostPort,
+                trustedAssetHostPorts,
+                clampInt(config.maxJsonBytes, 4 * 1024, 4 * 1024 * 1024, DEFAULT_MAX_JSON_BYTES),
+                clampInt(config.maxImageBytes, 64 * 1024, 32 * 1024 * 1024, DEFAULT_MAX_IMAGE_BYTES));
     }
 
     public static void setAuthToken(String token) {
@@ -122,6 +226,7 @@ public final class ServerApiClient {
             boolean slim, ProgressListener callback) {
         ProgressListener listener = callback == null ? NO_OP_PROGRESS : callback;
         CompletableFuture.runAsync(() -> {
+            RuntimeConfig cfg = runtimeConfig();
             if (file == null || !file.isFile()) {
                 ModLog.warn("Upload aborted: invalid file={}", file);
                 listener.onDone(false, "Invalid file");
@@ -142,15 +247,34 @@ public final class ServerApiClient {
                     file.length(), playerUuid, slim);
             HttpURLConnection connection = null;
             try {
-                String boundary = "----CatSkinC-" + System.nanoTime();
-                connection = open("POST", PATH_UPLOAD, "multipart/form-data; boundary=" + boundary);
+                byte[] skinBytes = readFileBytes(file, cfg.maxImageBytes, "skin");
+                byte[] mouthOpenBytes = mouthOpenFile == null ? null
+                        : readFileBytes(mouthOpenFile, cfg.maxImageBytes, "mouth_open");
+                byte[] mouthCloseBytes = mouthCloseFile == null ? null
+                        : readFileBytes(mouthCloseFile, cfg.maxImageBytes, "mouth_close");
 
-                boolean includeLegacyMouth = mouthOpenFile != null;
+                String boundary = "----CatSkinC-" + System.nanoTime();
+                String requestId = newRequestId();
+                String bodyHash = computeUploadContentHash(
+                        playerUuid,
+                        slim,
+                        skinBytes,
+                        mouthOpenBytes,
+                        mouthCloseBytes);
+                connection = open(
+                        "POST",
+                        cfg.pathUpload,
+                        "multipart/form-data; boundary=" + boundary,
+                        bodyHash,
+                        requestId,
+                        true);
+
+                boolean includeLegacyMouth = mouthOpenBytes != null;
                 long multipartOverhead = estimateMultipartOverhead(
-                        boundary, playerUuid, slim, mouthOpenFile != null, mouthCloseFile != null, includeLegacyMouth);
-                long totalBytes = file.length()
-                        + (mouthOpenFile == null ? 0L : mouthOpenFile.length())
-                        + (mouthCloseFile == null ? 0L : mouthCloseFile.length())
+                        boundary, playerUuid, slim, mouthOpenBytes != null, mouthCloseBytes != null, includeLegacyMouth);
+                long totalBytes = skinBytes.length
+                        + (mouthOpenBytes == null ? 0L : mouthOpenBytes.length)
+                        + (mouthCloseBytes == null ? 0L : mouthCloseBytes.length)
                         + multipartOverhead;
                 listener.onStart(totalBytes);
 
@@ -175,29 +299,16 @@ public final class ServerApiClient {
                     writer.append("Content-Type: image/png").append("\r\n\r\n");
                     writer.flush();
 
-                    try (InputStream in = new FileInputStream(file)) {
-                        byte[] buffer = new byte[8_192];
-                        int read;
-                        while ((read = in.read(buffer)) != -1) {
-                            out.write(buffer, 0, read);
-                        }
-                    }
+                    out.write(skinBytes);
 
-                    if (mouthOpenFile != null) {
+                    if (mouthOpenBytes != null) {
                         writer.append("\r\n--").append(boundary).append("\r\n");
                         writer.append(
                                 "Content-Disposition: form-data; name=\"mouth_open\"; filename=\"mouth-open.png\"")
                                 .append("\r\n");
                         writer.append("Content-Type: image/png").append("\r\n\r\n");
                         writer.flush();
-
-                        try (InputStream in = new FileInputStream(mouthOpenFile)) {
-                            byte[] buffer = new byte[8_192];
-                            int read;
-                            while ((read = in.read(buffer)) != -1) {
-                                out.write(buffer, 0, read);
-                            }
-                        }
+                        out.write(mouthOpenBytes);
 
                         // Legacy compatibility: older server builds expect "mouth" only.
                         writer.append("\r\n--").append(boundary).append("\r\n");
@@ -206,30 +317,16 @@ public final class ServerApiClient {
                                 .append("\r\n");
                         writer.append("Content-Type: image/png").append("\r\n\r\n");
                         writer.flush();
-
-                        try (InputStream in = new FileInputStream(mouthOpenFile)) {
-                            byte[] buffer = new byte[8_192];
-                            int read;
-                            while ((read = in.read(buffer)) != -1) {
-                                out.write(buffer, 0, read);
-                            }
-                        }
+                        out.write(mouthOpenBytes);
                     }
-                    if (mouthCloseFile != null) {
+                    if (mouthCloseBytes != null) {
                         writer.append("\r\n--").append(boundary).append("\r\n");
                         writer.append(
                                 "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"")
                                 .append("\r\n");
                         writer.append("Content-Type: image/png").append("\r\n\r\n");
                         writer.flush();
-
-                        try (InputStream in = new FileInputStream(mouthCloseFile)) {
-                            byte[] buffer = new byte[8_192];
-                            int read;
-                            while ((read = in.read(buffer)) != -1) {
-                                out.write(buffer, 0, read);
-                            }
-                        }
+                        out.write(mouthCloseBytes);
                     }
 
                     out.flush();
@@ -237,12 +334,12 @@ public final class ServerApiClient {
                     writer.flush();
                 }
 
-                int code = responseCode(connection);
-                String body = readBody(connection, code);
-                ModLog.trace("Upload response: code={}, body={}", code, bodyPreview(body));
+                int code = responseCode(connection, requestId);
+                String body = readBody(connection, code, cfg.maxJsonBytes);
+                ModLog.trace("Upload response: requestId={}, code={}, body={}", requestId, code, bodyPreview(body));
                 if (code / 100 != 2) {
                     listener.onDone(false, httpErrorMessage(body, code));
-                    ModLog.warn("Upload failed: code={}, message={}", code, bodyPreview(body));
+                    ModLog.warn("Upload failed: requestId={}, code={}, message={}", requestId, code, bodyPreview(body));
                     return;
                 }
 
@@ -253,7 +350,8 @@ public final class ServerApiClient {
                 }
                 invalidateSelectedCache(playerUuid);
                 listener.onDone(true, id);
-                ModLog.info("Upload success: uuid={}, slim={}, result={}", playerUuid, slim, id);
+                ModLog.info("event=upload.persisted request_id={} uuid={} slim={} result={}",
+                        requestId, playerUuid, slim, id);
             } catch (Exception exception) {
                 ModLog.error("Upload failed for file '" + safeFileName(file) + "'", exception);
                 listener.onDone(false, messageOrDefault(exception));
@@ -275,8 +373,9 @@ public final class ServerApiClient {
         CompletableFuture.runAsync(() -> {
             HttpURLConnection connection = null;
             try {
+                RuntimeConfig cfg = runtimeConfig();
+                String requestId = newRequestId();
                 ModLog.debug("Selecting skin: uuid={}, value={}, slim={}", playerUuid, skinIdOrUrl, slim);
-                connection = open("POST", PATH_SELECT, "application/json; charset=utf-8");
                 StringBuilder bodyBuilder = new StringBuilder(128)
                         .append("{\"uuid\":\"")
                         .append(playerUuid)
@@ -288,16 +387,26 @@ public final class ServerApiClient {
                 }
                 bodyBuilder.append('}');
                 String body = bodyBuilder.toString();
+                byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+                connection = open(
+                        "POST",
+                        cfg.pathSelect,
+                        "application/json; charset=utf-8",
+                        sha256Hex(bodyBytes),
+                        requestId,
+                        true);
                 try (OutputStream out = connection.getOutputStream()) {
-                    out.write(body.getBytes(StandardCharsets.UTF_8));
+                    out.write(bodyBytes);
                 }
-                int code = responseCode(connection);
-                String responseBody = readBody(connection, code);
+                int code = responseCode(connection, requestId);
+                String responseBody = readBody(connection, code, cfg.maxJsonBytes);
                 if (code / 100 != 2) {
-                    ModLog.warn("Select skin failed: code={}, body={}", code, bodyPreview(responseBody));
+                    ModLog.warn("Select skin failed: requestId={}, code={}, body={}", requestId, code,
+                            bodyPreview(responseBody));
                 } else {
                     invalidateSelectedCache(playerUuid);
-                    ModLog.trace("Select skin ok: code={}, body={}", code, bodyPreview(responseBody));
+                    ModLog.trace("Select skin ok: requestId={}, code={}, body={}", requestId, code,
+                            bodyPreview(responseBody));
                 }
             } catch (Exception exception) {
                 ModLog.error("Select skin request failed for uuid=" + playerUuid, exception);
@@ -323,14 +432,23 @@ public final class ServerApiClient {
     private static ClearResult sendClearSelection(UUID playerUuid, String mode) {
         HttpURLConnection connection = null;
         try {
-            connection = open("POST", PATH_SELECT, "application/json; charset=utf-8");
+            RuntimeConfig cfg = runtimeConfig();
+            String requestId = newRequestId();
             String body = "{\"uuid\":\"" + playerUuid + "\",\"clear\":\"" + mode + "\"}";
+            byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+            connection = open(
+                    "POST",
+                    cfg.pathSelect,
+                    "application/json; charset=utf-8",
+                    sha256Hex(bodyBytes),
+                    requestId,
+                    true);
             try (OutputStream out = connection.getOutputStream()) {
-                out.write(body.getBytes(StandardCharsets.UTF_8));
+                out.write(bodyBytes);
             }
 
-            int code = responseCode(connection);
-            String responseBody = readBody(connection, code);
+            int code = responseCode(connection, requestId);
+            String responseBody = readBody(connection, code, cfg.maxJsonBytes);
             if (code / 100 != 2) {
                 String message = httpErrorMessage(responseBody, code);
                 ModLog.warn("Clear selection failed: uuid={}, mode={}, code={}, body={}",
@@ -370,10 +488,11 @@ public final class ServerApiClient {
             ModLog.trace("Fetch selected skipped: uuid is null");
             return CompletableFuture.completedFuture(null);
         }
+        RuntimeConfig cfg = runtimeConfig();
 
         long now = System.currentTimeMillis();
         CachedSelected cached = SELECTED_CACHE.get(playerUuid);
-        if (cached != null && (now - cached.cachedAtMs) <= SELECTED_CACHE_TTL_MS) {
+        if (cached != null && (now - cached.cachedAtMs) <= cfg.selectedCacheTtlMs) {
             ModLog.trace("Fetch selected cache hit: {}", playerUuid);
             return CompletableFuture.completedFuture(cached.value);
         }
@@ -387,11 +506,12 @@ public final class ServerApiClient {
         CompletableFuture<SelectedSkin> created = CompletableFuture.supplyAsync(() -> {
             HttpURLConnection connection = null;
             try {
-                String requestPath = PATH_SELECTED + (PATH_SELECTED.contains("?") ? "&uuid=" : "?uuid=") + playerUuid;
+                String requestId = newRequestId();
+                String requestPath = cfg.pathSelected + (cfg.pathSelected.contains("?") ? "&uuid=" : "?uuid=") + playerUuid;
                 ModLog.trace("Fetch selected request: {}", requestPath);
-                connection = open("GET", requestPath, null);
-                int code = responseCode(connection);
-                String body = readBody(connection, code);
+                connection = open("GET", requestPath, null, SHA256_EMPTY_HEX, requestId, true);
+                int code = responseCode(connection, requestId);
+                String body = readBody(connection, code, cfg.maxJsonBytes);
                 if (code / 100 != 2) {
                     ModLog.warn("Fetch selected failed: uuid={}, code={}, body={}", playerUuid, code,
                             bodyPreview(body));
@@ -439,16 +559,18 @@ public final class ServerApiClient {
         return CompletableFuture.supplyAsync(() -> {
             HttpURLConnection connection = null;
             try {
+                RuntimeConfig cfg = runtimeConfig();
+                String requestId = newRequestId();
                 ModLog.trace("Downloading texture from {}", urlOrPath);
-                connection = open("GET", urlOrPath, null);
-                int code = responseCode(connection);
+                connection = open("GET", urlOrPath, null, SHA256_EMPTY_HEX, requestId, false);
+                int code = responseCode(connection, requestId);
                 if (code / 100 != 2) {
                     ModLog.warn("Texture download failed: code={}, url={}", code, urlOrPath);
                     return null;
                 }
                 byte[] bodyBytes;
                 try (InputStream in = connection.getInputStream()) {
-                    bodyBytes = readAllBytes(in);
+                    bodyBytes = readAllBytes(in, cfg.maxImageBytes);
                 }
                 String expectedHash = connection.getHeaderField("X-CatSkin-Sha256");
                 if (expectedHash != null && !expectedHash.isBlank()) {
@@ -461,6 +583,16 @@ public final class ServerApiClient {
                 }
                 try (ByteArrayInputStream imageInput = new ByteArrayInputStream(bodyBytes)) {
                     NativeImage image = NativeImage.read(imageInput);
+                    if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0
+                            || image.getWidth() > 8192 || image.getHeight() > 8192) {
+                        ModLog.warn("Texture dimensions rejected for {}: {}x{}", urlOrPath,
+                                image == null ? 0 : image.getWidth(),
+                                image == null ? 0 : image.getHeight());
+                        if (image != null) {
+                            image.close();
+                        }
+                        return null;
+                    }
                     ModLog.trace("Texture downloaded: {}x{} from {}", image.getWidth(), image.getHeight(), urlOrPath);
                     return image;
                 }
@@ -485,18 +617,20 @@ public final class ServerApiClient {
     }
 
     public static CompletableFuture<Boolean> pingAsyncOk() {
+        RuntimeConfig cfg = runtimeConfig();
         CachedPing ping = cachedPing;
         long now = System.currentTimeMillis();
-        if (ping != null && (now - ping.cachedAtMs) <= PING_CACHE_TTL_MS) {
+        if (ping != null && (now - ping.cachedAtMs) <= cfg.pingCacheTtlMs) {
             return CompletableFuture.completedFuture(ping.ok);
         }
 
         return CompletableFuture.supplyAsync(() -> {
             HttpURLConnection connection = null;
             try {
+                String requestId = newRequestId();
                 ModLog.trace("Cloud ping start");
-                connection = open("GET", "/", null);
-                boolean ok = responseCode(connection) / 100 == 2;
+                connection = open("GET", "/", null, SHA256_EMPTY_HEX, requestId, true);
+                boolean ok = responseCode(connection, requestId) / 100 == 2;
                 cachedPing = new CachedPing(ok, System.currentTimeMillis());
                 ModLog.debug("Cloud ping result={}", ok);
                 return ok;
@@ -513,8 +647,9 @@ public final class ServerApiClient {
         if (id == null || id.isBlank()) {
             return null;
         }
+        RuntimeConfig cfg = runtimeConfig();
         String cleanId = id.endsWith(".png") ? id.substring(0, id.length() - 4) : id;
-        return join(BASE_URL, PATH_PUBLIC + cleanId + "/skin.png");
+        return join(cfg.baseUrl, cfg.pathPublic + cleanId + "/skin.png");
     }
 
     public static synchronized void startSse(Consumer<UpdateEvent> consumer) {
@@ -529,11 +664,13 @@ public final class ServerApiClient {
                 attempt++;
                 HttpURLConnection connection = null;
                 try {
-                    ModLog.debug("SSE connect attempt {} -> {}", attempt, PATH_EVENTS);
-                    connection = openSse(PATH_EVENTS);
-                    int code = responseCode(connection);
+                    RuntimeConfig cfg = runtimeConfig();
+                    String requestId = newRequestId();
+                    ModLog.debug("SSE connect attempt {} -> {}", attempt, cfg.pathEvents);
+                    connection = openSse(cfg.pathEvents, requestId);
+                    int code = responseCode(connection, requestId);
                     if (code / 100 != 2) {
-                        String body = readBody(connection, code);
+                        String body = readBody(connection, code, cfg.maxJsonBytes);
                         ModLog.warn("SSE connect failed: code={}, body={}", code, bodyPreview(body));
                         sleepQuietly(1_500L);
                         continue;
@@ -645,31 +782,93 @@ public final class ServerApiClient {
         }
     }
 
-    private static HttpURLConnection open(String method, String pathOrUrl, String contentType) throws IOException {
-        String requestUrl = isHttp(pathOrUrl) ? pathOrUrl : join(BASE_URL, pathOrUrl);
-        ModLog.trace("HTTP {} {}", method, requestUrl);
-        HttpURLConnection connection = (HttpURLConnection) new URL(requestUrl).openConnection();
-        connection.setInstanceFollowRedirects(true);
-        connection.setConnectTimeout(TIMEOUT_MS);
-        connection.setReadTimeout(TIMEOUT_MS);
+    private static HttpURLConnection open(
+            String method,
+            String pathOrUrl,
+            String contentType,
+            String bodySha256Hex,
+            String requestId,
+            boolean apiRequest) throws IOException {
+        RuntimeConfig cfg = runtimeConfig();
+        URL requestUrl = resolveRequestUrl(cfg, pathOrUrl, apiRequest);
+        enforceTransportPolicy(cfg, requestUrl);
+        String requestUrlString = requestUrl.toString();
+        ModLog.trace("HTTP {} {} requestId={}", method, requestUrlString, requestId);
+
+        HttpURLConnection connection = (HttpURLConnection) requestUrl.openConnection();
+        connection.setInstanceFollowRedirects(false);
+        connection.setConnectTimeout(cfg.timeoutMs);
+        connection.setReadTimeout(cfg.timeoutMs);
         connection.setRequestMethod(method);
         connection.setRequestProperty("User-Agent", "catskinc-remake/ServerApiClient");
+        connection.setRequestProperty(HEADER_REQUEST_ID, requestId);
         if (contentType != null) {
             connection.setRequestProperty("Content-Type", contentType);
         }
-        if (authToken != null && !authToken.isBlank()) {
+
+        if (apiRequest && authToken != null && !authToken.isBlank() && hostPortKey(requestUrl).equals(cfg.apiHostPort)) {
             connection.setRequestProperty("Authorization", "Bearer " + authToken);
         }
+
+        if (apiRequest) {
+            String normalizedBodyHash = normalizeContentHash(bodySha256Hex);
+            if (normalizedBodyHash == null) {
+                throw new IOException("Invalid request body hash");
+            }
+            connection.setRequestProperty(HEADER_CONTENT_SHA256, normalizedBodyHash);
+            if (cfg.requestSigningKey != null && !cfg.requestSigningKey.isBlank()) {
+                String timestamp = Long.toString(System.currentTimeMillis() / 1000L);
+                String nonce = newRequestNonce();
+                String target = requestUrl.getPath();
+                if (target == null || target.isBlank()) {
+                    target = "/";
+                }
+                if (requestUrl.getQuery() != null && !requestUrl.getQuery().isBlank()) {
+                    target = target + "?" + requestUrl.getQuery();
+                }
+                String payload = method + "\n" + target + "\n" + timestamp + "\n" + nonce + "\n" + normalizedBodyHash;
+                String signature = signRequest(payload, cfg.requestSigningKey);
+                connection.setRequestProperty(HEADER_TIMESTAMP, timestamp);
+                connection.setRequestProperty(HEADER_NONCE, nonce);
+                connection.setRequestProperty(HEADER_SIGNATURE, signature);
+            }
+        }
+
         if ("POST".equals(method) || "PUT".equals(method)) {
             connection.setDoOutput(true);
         }
         return connection;
     }
 
-    private static HttpURLConnection openSse(String pathOrUrl) throws IOException {
-        HttpURLConnection connection = open("GET", pathOrUrl, null);
+    private static HttpURLConnection openSse(String pathOrUrl, String requestId) throws IOException {
+        HttpURLConnection connection = open("GET", pathOrUrl, null, SHA256_EMPTY_HEX, requestId, true);
         connection.setReadTimeout(0);
         return connection;
+    }
+
+    private static URL resolveRequestUrl(RuntimeConfig cfg, String pathOrUrl, boolean apiRequest) throws IOException {
+        if (isHttp(pathOrUrl)) {
+            URL absolute = parseUrl(pathOrUrl);
+            String hostPort = hostPortKey(absolute);
+            if (apiRequest) {
+                if (!hostPort.equals(cfg.apiHostPort)) {
+                    throw new IOException("Refusing API request to untrusted host");
+                }
+            } else if (!cfg.trustedAssetHostPorts.contains(hostPort)
+                    && !cfg.trustedAssetHostPorts.contains(absolute.getHost().toLowerCase(Locale.ROOT))) {
+                throw new IOException("Refusing asset request to untrusted host");
+            }
+            return absolute;
+        }
+        return parseUrl(join(cfg.baseUrl, pathOrUrl));
+    }
+
+    private static void enforceTransportPolicy(RuntimeConfig cfg, URL requestUrl) throws IOException {
+        String protocol = requestUrl.getProtocol() == null ? "" : requestUrl.getProtocol().toLowerCase(Locale.ROOT);
+        String host = requestUrl.getHost() == null ? "" : requestUrl.getHost();
+        if ("http".equals(protocol) && !cfg.allowInsecureHttp && !isLocalHost(host)) {
+            throw new IOException("Insecure HTTP blocked for non-localhost host");
+        }
     }
 
     private static String join(String base, String path) {
@@ -699,18 +898,26 @@ public final class ServerApiClient {
         return value != null && (value.startsWith("http://") || value.startsWith("https://"));
     }
 
-    private static int responseCode(HttpURLConnection connection) throws IOException {
-        return connection.getResponseCode();
+    private static int responseCode(HttpURLConnection connection, String requestId) throws IOException {
+        int code = connection.getResponseCode();
+        verifyTlsPinIfNeeded(connection, runtimeConfig(), requestId);
+        if (isRedirectCode(code)) {
+            String location = connection.getHeaderField("Location");
+            if (location != null && !location.isBlank()) {
+                ModLog.warn("Redirect blocked by policy: requestId={}, location={}", requestId, location);
+            }
+        }
+        return code;
     }
 
-    /* package-private for testing */ static String readBody(HttpURLConnection connection, int code) {
+    /* package-private for testing */ static String readBody(HttpURLConnection connection, int code, int maxBytes) {
         try (InputStream in = code / 100 == 2
                 ? connection.getInputStream()
                 : connection.getErrorStream()) {
             if (in == null) {
                 return null;
             }
-            return new String(readAllBytes(in), StandardCharsets.UTF_8);
+            return new String(readAllBytes(in, maxBytes), StandardCharsets.UTF_8);
         } catch (Exception exception) {
             ModLog.trace("Failed reading HTTP body: {}", exception.getMessage());
             return null;
@@ -789,20 +996,29 @@ public final class ServerApiClient {
         stopSse();
     }
 
-    private static byte[] readAllBytes(InputStream inputStream) throws IOException {
+    private static byte[] readAllBytes(InputStream inputStream, int maxBytes) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] buffer = new byte[8_192];
+        int total = 0;
         int read;
         while ((read = inputStream.read(buffer)) != -1) {
+            total += read;
+            if (total > maxBytes) {
+                throw new IOException("response too large");
+            }
             out.write(buffer, 0, read);
         }
         return out.toByteArray();
     }
 
     private static String sha256Hex(byte[] value) throws IOException {
+        return toHex(sha256Bytes(value));
+    }
+
+    private static byte[] sha256Bytes(byte[] value) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return toHex(digest.digest(value));
+            return digest.digest(value);
         } catch (Exception exception) {
             throw new IOException("SHA-256 unavailable", exception);
         }
@@ -874,6 +1090,247 @@ public final class ServerApiClient {
         };
     }
 
+    private static String normalizeBaseUrl(String value) {
+        String base = value == null ? "" : value.trim();
+        if (base.isEmpty()) {
+            base = DEFAULT_BASE_URL;
+        }
+        if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            base = DEFAULT_BASE_URL;
+        }
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base;
+    }
+
+    private static String normalizePath(String value, String fallback) {
+        String path = value == null ? "" : value.trim();
+        if (path.isEmpty()) {
+            path = fallback;
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        return path;
+    }
+
+    private static String ensureTrailingSlash(String value) {
+        if (value == null || value.isBlank()) {
+            return "/";
+        }
+        return value.endsWith("/") ? value : value + "/";
+    }
+
+    private static String normalizePin(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String pin = value.trim();
+        if (pin.startsWith("sha256/")) {
+            pin = pin.substring("sha256/".length());
+        }
+        String compact = pin.replace(":", "").replace("-", "");
+        if (compact.length() == 64 && isHex(compact)) {
+            return compact.toLowerCase(Locale.ROOT);
+        }
+        return pin;
+    }
+
+    private static int clampInt(int value, int min, int max, int fallback) {
+        if (value <= 0) {
+            return fallback;
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static long clampLong(long value, long min, long max, long fallback) {
+        if (value <= 0L) {
+            return fallback;
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static URL parseUrl(String url) throws IOException {
+        try {
+            return new URL(url);
+        } catch (MalformedURLException exception) {
+            throw new IOException("Invalid URL: " + url, exception);
+        }
+    }
+
+    private static String hostPortKey(URL url) {
+        if (url == null || url.getHost() == null) {
+            return "";
+        }
+        int port = url.getPort();
+        if (port < 0) {
+            port = url.getDefaultPort();
+        }
+        return url.getHost().toLowerCase(Locale.ROOT) + ":" + port;
+    }
+
+    private static boolean isLocalHost(String host) {
+        if (host == null) {
+            return false;
+        }
+        String normalized = host.trim().toLowerCase(Locale.ROOT);
+        return "localhost".equals(normalized)
+                || "127.0.0.1".equals(normalized)
+                || "::1".equals(normalized)
+                || "[::1]".equals(normalized);
+    }
+
+    private static String normalizeContentHash(String hash) {
+        String value = hash == null ? SHA256_EMPTY_HEX : hash.trim().toLowerCase(Locale.ROOT);
+        if (value.isEmpty()) {
+            value = SHA256_EMPTY_HEX;
+        }
+        if (value.length() != 64) {
+            return null;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+                return null;
+            }
+        }
+        return value;
+    }
+
+    private static String newRequestId() {
+        return UUID.randomUUID().toString();
+    }
+
+    private static String newRequestNonce() {
+        String raw = UUID.randomUUID().toString().replace("-", "");
+        return raw + Long.toHexString(System.nanoTime());
+    }
+
+    private static String signRequest(String payload, String rawKey) throws IOException {
+        byte[] keyBytes = decodeKeyMaterial(rawKey);
+        if (keyBytes.length < 16) {
+            throw new IOException("request signing key too short");
+        }
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(keyBytes, "HmacSHA256"));
+            return toHex(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException exception) {
+            throw new IOException("Unable to sign request", exception);
+        }
+    }
+
+    private static byte[] decodeKeyMaterial(String rawValue) throws IOException {
+        String value = rawValue == null ? "" : rawValue.trim();
+        if (value.isEmpty()) {
+            return new byte[0];
+        }
+        try {
+            if (value.startsWith("hex:")) {
+                String hex = value.substring(4).trim();
+                if ((hex.length() & 1) != 0) {
+                    throw new IOException("Invalid hex key length");
+                }
+                byte[] out = new byte[hex.length() / 2];
+                for (int i = 0; i < out.length; i++) {
+                    int hi = Character.digit(hex.charAt(i * 2), 16);
+                    int lo = Character.digit(hex.charAt(i * 2 + 1), 16);
+                    if (hi < 0 || lo < 0) {
+                        throw new IOException("Invalid hex signing key");
+                    }
+                    out[i] = (byte) ((hi << 4) + lo);
+                }
+                return out;
+            }
+            if (value.startsWith("b64:")) {
+                return Base64.getDecoder().decode(value.substring(4).trim());
+            }
+            return value.getBytes(StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException exception) {
+            throw new IOException("Invalid signing key encoding", exception);
+        }
+    }
+
+    private static byte[] readFileBytes(File file, int maxBytes, String label) throws IOException {
+        if (file == null) {
+            return null;
+        }
+        byte[] bytes = Files.readAllBytes(file.toPath());
+        if (bytes.length > maxBytes) {
+            throw new IOException(label + " file is too large");
+        }
+        return bytes;
+    }
+
+    private static String computeUploadContentHash(
+            UUID playerUuid,
+            boolean slim,
+            byte[] skinBytes,
+            byte[] mouthOpenBytes,
+            byte[] mouthCloseBytes) throws IOException {
+        ByteArrayOutputStream canonical = new ByteArrayOutputStream();
+        appendHashField(canonical, "uuid", playerUuid == null ? new byte[0]
+                : playerUuid.toString().getBytes(StandardCharsets.UTF_8));
+        appendHashField(canonical, "slim", (slim ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+        appendHashField(canonical, "file", skinBytes == null ? new byte[0] : skinBytes);
+        appendHashField(canonical, "mouth_open", mouthOpenBytes == null ? new byte[0] : mouthOpenBytes);
+        appendHashField(canonical, "mouth_close", mouthCloseBytes == null ? new byte[0] : mouthCloseBytes);
+        return sha256Hex(canonical.toByteArray());
+    }
+
+    private static void appendHashField(ByteArrayOutputStream output, String name, byte[] value) throws IOException {
+        byte[] data = value == null ? new byte[0] : value;
+        output.write(name.getBytes(StandardCharsets.UTF_8));
+        output.write(':');
+        output.write(Integer.toString(data.length).getBytes(StandardCharsets.UTF_8));
+        output.write('\n');
+        output.write(data);
+        output.write('\n');
+    }
+
+    private static void verifyTlsPinIfNeeded(HttpURLConnection connection, RuntimeConfig cfg, String requestId)
+            throws IOException {
+        if (!(connection instanceof HttpsURLConnection httpsConnection)) {
+            return;
+        }
+        String pin = cfg.tlsPinSha256;
+        if (pin == null || pin.isBlank()) {
+            return;
+        }
+        try {
+            Certificate[] certs = httpsConnection.getServerCertificates();
+            if (certs == null || certs.length == 0) {
+                throw new IOException("TLS pin verification failed: no certificates");
+            }
+            byte[] keyBytes = certs[0].getPublicKey().getEncoded();
+            String actualHex = sha256Hex(keyBytes).toLowerCase(Locale.ROOT);
+            String actualB64 = Base64.getEncoder().encodeToString(sha256Bytes(keyBytes));
+            boolean ok = pin.equals(actualHex) || pin.equals(actualB64) || ("sha256/" + actualB64).equals(pin);
+            if (!ok) {
+                throw new IOException("TLS pin mismatch for request " + requestId);
+            }
+        } catch (IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IOException("TLS pin verification failed", exception);
+        }
+    }
+
+    private static boolean isRedirectCode(int code) {
+        return code == 301 || code == 302 || code == 303 || code == 307 || code == 308;
+    }
+
+    private static boolean isHex(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char c = Character.toLowerCase(value.charAt(i));
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static void publishClearResult(Consumer<ClearResult> callback, ClearResult result) {
         if (callback == null) {
             return;
@@ -886,56 +1343,59 @@ public final class ServerApiClient {
     }
 
     private static String jsonString(String body, String key) {
-        if (body == null) {
+        JsonObject object = parseJsonObject(body);
+        if (object == null || key == null || key.isBlank() || !object.has(key)) {
             return null;
         }
-        String pattern = "\"" + key + "\"";
-        int start = body.indexOf(pattern);
-        if (start < 0) {
+        JsonElement element = object.get(key);
+        if (element == null || element.isJsonNull()) {
             return null;
         }
-        start = body.indexOf(':', start);
-        if (start < 0) {
-            return null;
+        if (element.isJsonPrimitive()) {
+            return element.getAsJsonPrimitive().getAsString();
         }
-        int q1 = body.indexOf('"', start + 1);
-        if (q1 < 0) {
-            return null;
-        }
-        int q2 = body.indexOf('"', q1 + 1);
-        if (q2 < 0) {
-            return null;
-        }
-        return body.substring(q1 + 1, q2);
+        return element.toString();
     }
 
     private static boolean jsonBoolean(String body, String key, boolean defaultValue) {
-        if (body == null) {
+        JsonObject object = parseJsonObject(body);
+        if (object == null || key == null || key.isBlank() || !object.has(key)) {
             return defaultValue;
         }
-        String pattern = "\"" + key + "\"";
-        int start = body.indexOf(pattern);
-        if (start < 0) {
+        JsonElement element = object.get(key);
+        if (element == null || element.isJsonNull()) {
             return defaultValue;
         }
-        start = body.indexOf(':', start);
-        if (start < 0) {
-            return defaultValue;
-        }
-        int i = start + 1;
-        while (i < body.length() && Character.isWhitespace(body.charAt(i))) {
-            i++;
-        }
-        if (i >= body.length()) {
-            return defaultValue;
-        }
-        if (body.regionMatches(true, i, "true", 0, 4) || body.charAt(i) == '1') {
-            return true;
-        }
-        if (body.regionMatches(true, i, "false", 0, 5) || body.charAt(i) == '0') {
-            return false;
+        if (element.isJsonPrimitive()) {
+            if (element.getAsJsonPrimitive().isBoolean()) {
+                return element.getAsBoolean();
+            }
+            if (element.getAsJsonPrimitive().isNumber()) {
+                return element.getAsInt() != 0;
+            }
+            if (element.getAsJsonPrimitive().isString()) {
+                String value = element.getAsString();
+                if ("true".equalsIgnoreCase(value) || "1".equals(value)) {
+                    return true;
+                }
+                if ("false".equalsIgnoreCase(value) || "0".equals(value)) {
+                    return false;
+                }
+            }
         }
         return defaultValue;
+    }
+
+    private static JsonObject parseJsonObject(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            JsonElement parsed = JsonParser.parseString(body);
+            return parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private static String escapeJson(String value) {
