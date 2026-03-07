@@ -16,6 +16,7 @@ public final class ClientConfig {
     public String pathSelected = "/selected";
     public String pathPublic = "/public/";
     public String pathEvents = "/events";
+    public String pathVersionCheck = "/version/check";
     public int timeoutMs = 15_000;
     public long selectedCacheTtlMs = 1_500L;
     public long pingCacheTtlMs = 10_000L;
@@ -46,6 +47,7 @@ public final class ClientConfig {
             pathPublic = pathPublic + "/";
         }
         pathEvents = sanitizePath(pathEvents, "/events");
+        pathVersionCheck = sanitizePath(pathVersionCheck, "/version/check");
         timeoutMs = clamp(timeoutMs, 1_000, 120_000);
         selectedCacheTtlMs = clamp(selectedCacheTtlMs, 250L, 60_000L);
         pingCacheTtlMs = clamp(pingCacheTtlMs, 1_000L, 120_000L);

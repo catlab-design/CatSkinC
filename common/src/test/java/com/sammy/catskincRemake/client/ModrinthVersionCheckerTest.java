@@ -8,6 +8,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class ModrinthVersionCheckerTest {
     @Test
+    void parseResponseReadsServerVersionCheckPayload() {
+        String response = """
+                {
+                  "project": "catskinc",
+                  "current": "2.0.0",
+                  "latest": "2.0.1",
+                  "latestName": "CatSkinC 2.0.1",
+                  "updateAvailable": true,
+                  "url": "https://modrinth.com/mod/catskinc/version/demo"
+                }
+                """;
+
+        ModrinthVersionChecker.UpdateCheckResult result = ModrinthVersionChecker.parseResponse(response, "2.0.0");
+
+        assertTrue(result.updateAvailable());
+        assertEquals("2.0.0", result.currentVersion());
+        assertEquals("2.0.1", result.latestVersion());
+        assertEquals("CatSkinC 2.0.1", result.latestName());
+    }
+
+    @Test
     void parseResponsePrefersNewestListedRelease() {
         String response = """
                 [
@@ -75,5 +96,12 @@ final class ModrinthVersionCheckerTest {
         assertTrue(ModrinthVersionChecker.compareVersions("2.10.0", "2.9.9") > 0);
         assertTrue(ModrinthVersionChecker.compareVersions("2.0.0", "2.0.0-beta.1") > 0);
         assertEquals(0, ModrinthVersionChecker.compareVersions("v2.0.0+build.5", "2.0.0"));
+    }
+
+    @Test
+    void buildRequestPathTargetsServerVersionEndpoint() {
+        assertEquals(
+                "/version/check?current=2.0.0&minecraft=1.20.1&loader=fabric",
+                ModrinthVersionChecker.buildRequestPath("2.0.0", "1.20.1", "fabric"));
     }
 }

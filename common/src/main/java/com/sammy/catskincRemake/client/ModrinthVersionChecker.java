@@ -22,9 +22,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class ModrinthVersionChecker {
-    private static final String PROJECT_SLUG = "catskinc";
-    private static final String API_BASE_URL = "https://api.modrinth.com/v2/project/" + PROJECT_SLUG + "/version";
-    private static final String USER_AGENT = "catskinc-remake/ModrinthVersionChecker";
+    private static final String DEFAULT_PATH_VERSION_CHECK = "/version/check";
+    private static final String USER_AGENT = "catskinc-remake/VersionChecker";
     private static final int MAX_RESPONSE_BYTES = 256 * 1024;
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "CatSkinC-Modrinth");
@@ -57,8 +56,8 @@ public final class ModrinthVersionChecker {
                 future = CompletableFuture.supplyAsync(() -> fetchUpdate(currentVersion), EXECUTOR)
                         .exceptionally(exception -> {
                             Throwable cause = unwrap(exception);
-                            ModLog.debug("Modrinth version check failed: {}", cause.getMessage());
-                            ModLog.trace("Modrinth version check failed", cause);
+                            ModLog.debug("Server-backed version check failed: {}", cause.getMessage());
+                            ModLog.trace("Server-backed version check failed", cause);
                             return UpdateCheckResult.none(currentVersion);
                         });
             }
@@ -86,6 +85,9 @@ public final class ModrinthVersionChecker {
         }
 
         JsonElement parsed = JsonParser.parseString(body);
+        if (parsed.isJsonObject()) {
+            return parseServerResponse(parsed.getAsJsonObject(), current);
+        }
         if (!parsed.isJsonArray()) {
             return UpdateCheckResult.none(currentVersion);
         }
@@ -174,13 +176,16 @@ public final class ModrinthVersionChecker {
         String loader = currentLoader();
         String gameVersion = blankToEmpty(Platform.getMinecraftVersion());
         if (loader.isBlank() || gameVersion.isBlank()) {
-            ModLog.debug("Skipping Modrinth version check; loader='{}', gameVersion='{}'", loader, gameVersion);
+            ModLog.debug("Skipping update check; loader='{}', gameVersion='{}'", loader, gameVersion);
             return UpdateCheckResult.none(currentVersion);
         }
 
         HttpURLConnection connection = null;
         try {
-            URL requestUrl = new URL(buildRequestUrl(gameVersion, loader));
+            ClientConfig config = ConfigManager.get();
+            config.sanitize();
+            String requestPath = buildRequestPath(currentVersion, gameVersion, loader, config.pathVersionCheck);
+            URL requestUrl = new URL(buildRequestUrl(config.apiBaseUrl, requestPath));
             connection = (HttpURLConnection) requestUrl.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(requestTimeoutMs());
@@ -191,7 +196,7 @@ public final class ModrinthVersionChecker {
             int code = connection.getResponseCode();
             String body = readBody(connection, code, MAX_RESPONSE_BYTES);
             if (code < 200 || code >= 300) {
-                ModLog.debug("Modrinth version check returned HTTP {} for {}", code, requestUrl);
+                ModLog.debug("Server-backed version check returned HTTP {} for {}", code, requestUrl);
                 return UpdateCheckResult.none(currentVersion);
             }
 
@@ -203,7 +208,7 @@ public final class ModrinthVersionChecker {
             }
             return result;
         } catch (IOException exception) {
-            throw new RuntimeException("Failed to query Modrinth", exception);
+            throw new RuntimeException("Failed to query version server", exception);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -211,13 +216,36 @@ public final class ModrinthVersionChecker {
         }
     }
 
-    private static String buildRequestUrl(String gameVersion, String loader) {
-        String encodedGameVersions = URLEncoder.encode("[\"" + gameVersion + "\"]", StandardCharsets.UTF_8);
-        String encodedLoaders = URLEncoder.encode("[\"" + loader + "\"]", StandardCharsets.UTF_8);
-        return API_BASE_URL
-                + "?game_versions=" + encodedGameVersions
-                + "&loaders=" + encodedLoaders
-                + "&include_changelog=false";
+    static String buildRequestPath(String currentVersion, String gameVersion, String loader) {
+        return buildRequestPath(currentVersion, gameVersion, loader, DEFAULT_PATH_VERSION_CHECK);
+    }
+
+    private static String buildRequestPath(String currentVersion, String gameVersion, String loader, String versionCheckPath) {
+        String normalizedPath = blankToEmpty(versionCheckPath);
+        if (normalizedPath.isBlank()) {
+            normalizedPath = DEFAULT_PATH_VERSION_CHECK;
+        }
+        if (!normalizedPath.startsWith("/")) {
+            normalizedPath = "/" + normalizedPath;
+        }
+        StringBuilder builder = new StringBuilder(normalizedPath);
+        boolean hasQuery = normalizedPath.contains("?");
+        hasQuery = appendQuery(builder, hasQuery, "current", currentVersion);
+        hasQuery = appendQuery(builder, hasQuery, "minecraft", gameVersion);
+        appendQuery(builder, hasQuery, "loader", loader);
+        return builder.toString();
+    }
+
+    private static String buildRequestUrl(String baseUrl, String requestPath) {
+        String normalizedBaseUrl = blankToEmpty(baseUrl);
+        while (normalizedBaseUrl.endsWith("/")) {
+            normalizedBaseUrl = normalizedBaseUrl.substring(0, normalizedBaseUrl.length() - 1);
+        }
+        String normalizedPath = blankToEmpty(requestPath);
+        if (!normalizedPath.startsWith("/")) {
+            normalizedPath = "/" + normalizedPath;
+        }
+        return normalizedBaseUrl + normalizedPath;
     }
 
     private static String currentVersion() {
@@ -255,6 +283,21 @@ public final class ModrinthVersionChecker {
             return versionComparison;
         }
         return left.publishedAt().compareTo(right.publishedAt());
+    }
+
+    private static UpdateCheckResult parseServerResponse(JsonObject object, String currentVersion) {
+        String current = firstNonBlank(getString(object, "current"), currentVersion);
+        String latestVersion = firstNonBlank(getString(object, "latest"), getString(object, "latestVersion"));
+        if (latestVersion.isBlank()) {
+            return UpdateCheckResult.none(currentVersion);
+        }
+        String latestName = firstNonBlank(
+                firstNonBlank(getString(object, "latestName"), getString(object, "latest_name")),
+                latestVersion);
+        boolean updateAvailable = object.has("updateAvailable")
+                ? getBoolean(object, "updateAvailable", false)
+                : compareVersions(latestVersion, current) > 0;
+        return new UpdateCheckResult(current, latestVersion, latestName, updateAvailable);
     }
 
     private static int compareIdentifier(String left, String right, boolean mainSegment) {
@@ -322,6 +365,37 @@ public final class ModrinthVersionChecker {
         } catch (Exception ignored) {
             return "";
         }
+    }
+
+    private static boolean getBoolean(JsonObject object, String key, boolean defaultValue) {
+        JsonElement element = object.get(key);
+        if (element == null || element.isJsonNull()) {
+            return defaultValue;
+        }
+        try {
+            return element.getAsBoolean();
+        } catch (Exception ignored) {
+            String value = getString(object, key);
+            if ("true".equalsIgnoreCase(value) || "1".equals(value)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(value) || "0".equals(value)) {
+                return false;
+            }
+            return defaultValue;
+        }
+    }
+
+    private static boolean appendQuery(StringBuilder builder, boolean hasQuery, String key, String value) {
+        String normalized = blankToEmpty(value);
+        if (normalized.isBlank()) {
+            return hasQuery;
+        }
+        builder.append(hasQuery ? '&' : '?')
+                .append(key)
+                .append('=')
+                .append(URLEncoder.encode(normalized, StandardCharsets.UTF_8));
+        return true;
     }
 
     private static String readBody(HttpURLConnection connection, int code, int maxBytes) throws IOException {

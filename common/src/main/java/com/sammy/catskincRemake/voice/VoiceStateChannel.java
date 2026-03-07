@@ -6,8 +6,6 @@ import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
-
-import java.lang.reflect.Method;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,20 +19,7 @@ public final class VoiceStateChannel {
     }
 
     private static Identifier createChannelId() {
-        try {
-            Method of = Identifier.class.getMethod("of", String.class, String.class);
-            return (Identifier) of.invoke(null, "catskinc_remake", "voice_state");
-        } catch (Exception ignored) {
-        }
-        try {
-            Method tryParse = Identifier.class.getMethod("tryParse", String.class);
-            Identifier parsed = (Identifier) tryParse.invoke(null, "catskinc_remake:voice_state");
-            if (parsed != null) {
-                return parsed;
-            }
-        } catch (Exception ignored) {
-        }
-        throw new IllegalStateException("Failed to create voice_state channel identifier");
+        return new Identifier("catskinc_remake", "voice_state");
     }
 
     public static void bindServer(MinecraftServer server) {

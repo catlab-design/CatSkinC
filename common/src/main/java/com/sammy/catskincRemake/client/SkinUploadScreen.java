@@ -177,6 +177,8 @@ extends Screen {
     private int clearBtnCancelY;
     private int clearBtnCancelW;
     private int clearBtnCancelH;
+    private int lastMouseX = Integer.MIN_VALUE;
+    private int lastMouseY = Integer.MIN_VALUE;
     private final List<HistoryEntry> history = new ArrayList<HistoryEntry>();
 
     public SkinUploadScreen() {
@@ -313,6 +315,8 @@ extends Screen {
     }
 
     public void render(DrawContext drawContext, int n, int n2, float f) {
+        this.lastMouseX = n;
+        this.lastMouseY = n2;
         this.drawBackdrop(drawContext);
         float f2 = ConfigManager.get().uiScale;
         String string = this.ellipsis(this.title.getString(), this.width - 20);
@@ -344,6 +348,10 @@ extends Screen {
         if (arrayList.isEmpty()) {
             SkinUploadScreen.toastError("toast.error.drag_not_png", new Object[0]);
             ModSounds.play(ModSounds.UI_ERROR);
+            return;
+        }
+        if (SkinUploadDropPlan.resolve(this.lastMouseX, this.lastMouseY, this.leftX, this.leftY, this.leftW, this.leftH, arrayList.size()) == SkinUploadDropPlan.Mode.LIBRARY_IMPORT) {
+            this.importDroppedSkinsToLibrary(arrayList);
             return;
         }
         this.setSelectedFile((File)arrayList.get(0), false);
@@ -861,23 +869,18 @@ extends Screen {
             ModSounds.play(ModSounds.UI_ERROR);
             return;
         }
-        try (FileInputStream fileInputStream = new FileInputStream(file);){
+        SkinFileInfo skinFileInfo = this.readSkinFileInfo(file, true);
+        if (skinFileInfo == null) {
+            ModSounds.play(ModSounds.UI_ERROR);
+            return;
+        }
+        try {
             File file2;
-            NativeImage nativeImage = NativeImage.read((InputStream)fileInputStream);
-            int n = nativeImage.getWidth();
-            int n2 = nativeImage.getHeight();
-            if (!SkinUploadScreen.isValidSize(n, n2)) {
-                nativeImage.close();
-                SkinUploadScreen.toastError("toast.error.invalid_dimensions", new Object[0]);
-                ModSounds.play(ModSounds.UI_ERROR);
-                return;
-            }
-            nativeImage.close();
             this.selectedFile = file2 = bl ? file : this.copyToHistory(file);
-            this.selectedWidth = n;
-            this.selectedHeight = n2;
+            this.selectedWidth = skinFileInfo.width;
+            this.selectedHeight = skinFileInfo.height;
             this.refreshPreviewTexture();
-            ModLog.debug("Skin file selected: file='{}', size={}x{}, fromHistory={}", file2.getName(), n, n2, bl);
+            ModLog.debug("Skin file selected: file='{}', size={}x{}, fromHistory={}", file2.getName(), skinFileInfo.width, skinFileInfo.height, bl);
             if (!bl) {
                 SkinUploadScreen.toastInfo("toast.file.selected", file2.getName());
                 ModSounds.play(ModSounds.UI_UPLOAD);
@@ -889,6 +892,60 @@ extends Screen {
             ModLog.error("Failed to load selected skin file: " + String.valueOf(file), exception);
             SkinUploadScreen.toastError("toast.error.read_failed", new Object[0]);
             ModSounds.play(ModSounds.UI_ERROR);
+        }
+    }
+
+    private void importDroppedSkinsToLibrary(List<File> list) {
+        File file = null;
+        int n = 0;
+        for (File file2 : list) {
+            SkinFileInfo skinFileInfo = this.readSkinFileInfo(file2, false);
+            if (skinFileInfo == null) {
+                continue;
+            }
+            try {
+                File file3 = this.copyToHistory(file2);
+                if (file == null) {
+                    file = file3;
+                }
+                ++n;
+            }
+            catch (Exception exception) {
+                ModLog.warn("Failed to import dropped skin into history: " + String.valueOf(file2), exception);
+            }
+        }
+        if (file == null) {
+            SkinUploadScreen.toastError("toast.error.invalid_dimensions", new Object[0]);
+            ModSounds.play(ModSounds.UI_ERROR);
+            return;
+        }
+        this.setSelectedFile(file, true);
+        ModSounds.play(ModSounds.UI_UPLOAD);
+        ModLog.debug("Imported {} dropped skin(s) into history", n);
+    }
+
+    private SkinFileInfo readSkinFileInfo(File file, boolean bl) {
+        try (FileInputStream fileInputStream = new FileInputStream(file);){
+            NativeImage nativeImage = NativeImage.read((InputStream)fileInputStream);
+            int n = nativeImage.getWidth();
+            int n2 = nativeImage.getHeight();
+            nativeImage.close();
+            if (!SkinUploadScreen.isValidSize(n, n2)) {
+                if (bl) {
+                    SkinUploadScreen.toastError("toast.error.invalid_dimensions", new Object[0]);
+                }
+                return null;
+            }
+            return new SkinFileInfo(n, n2);
+        }
+        catch (Exception exception) {
+            if (bl) {
+                ModLog.error("Failed to read skin file: " + String.valueOf(file), exception);
+                SkinUploadScreen.toastError("toast.error.read_failed", new Object[0]);
+            } else {
+                ModLog.trace("Skipped dropped skin '{}': {}", file.getName(), exception.getMessage());
+            }
+            return null;
         }
     }
 
@@ -997,7 +1054,7 @@ extends Screen {
         }
         this.previewSlim = this.slimChecked;
         GameProfile gameProfile = new GameProfile(UUID.randomUUID(), "");
-        this.previewPlayer = new OtherClientPlayerEntity(minecraftClient.world, gameProfile);
+        this.previewPlayer = new PreviewPlayerEntity(minecraftClient.world, gameProfile);
         this.previewPlayer.setCustomNameVisible(false);
         this.previewPlayer.setPose(EntityPose.STANDING);
         this.previewPlayer.setInvisible(false);
@@ -1343,6 +1400,16 @@ extends Screen {
     private static String stripExt(String string) {
         int n = string.lastIndexOf(46);
         return n > 0 ? string.substring(0, n) : string;
+    }
+
+    private static final class SkinFileInfo {
+        private final int width;
+        private final int height;
+
+        private SkinFileInfo(int width, int height) {
+            this.width = width;
+            this.height = height;
+        }
     }
 
     private static NativeImage createHeadThumbnail(NativeImage nativeImage, int n) {
