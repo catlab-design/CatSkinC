@@ -1266,14 +1266,7 @@ extends Screen {
     }
 
     private void drawBackdrop(DrawContext drawContext) {
-        drawContext.fill(0, 0, this.width, this.height, -871428337);
-        int n = this.height / 3;
-        drawContext.fill(0, 0, this.width, n, 0x40222222);
-        drawContext.fill(0, n, this.width, this.height, 0x54141414);
-        drawContext.fill(0, this.height - 1, this.width, this.height, 0x28000000);
-        int n2 = Math.max(20, this.width / 12);
-        drawContext.fill(0, 0, n2, this.height, 0x20000000);
-        drawContext.fill(this.width - n2, 0, this.width, this.height, 0x20000000);
+        // Keep world background visible; no full-screen dark overlay.
     }
 
     private void drawPanel(DrawContext drawContext, int n, int n2, int n3, int n4) {

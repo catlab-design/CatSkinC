@@ -5,20 +5,30 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.toast.Toast;
 import net.minecraft.client.toast.ToastManager;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 
 public final class Toasts {
-    private static final Identifier TOAST_TEXTURE = Identifiers.parse("minecraft:textures/gui/toasts.png");
+    private static final int WIDTH = 160;
+    private static final int HEIGHT = 32;
+
+    private static final int COLOR_BORDER = 0xFFF0F0F0;
+    private static final int COLOR_BG = 0xFF1C1D21;
+    private static final int COLOR_BG_TOP = 0xFF26272D;
+    private static final int COLOR_BG_INNER = 0xFF16171B;
+
+    private static final int COLOR_TITLE = 0xFFFFE14A;
+    private static final int COLOR_TITLE_ERROR = 0xFFFF6B6B;
+    private static final int COLOR_TEXT = 0xFFFFFFFF;
+    private static final int COLOR_TEXT_DIM = 0xFFDDDDDD;
 
     private Toasts() {
     }
 
     public static void info(Text title, Text description) {
-        MinecraftClient.getInstance().getToastManager().add(new SimpleToast(title, description, 0xFFFFFFFF));
+        MinecraftClient.getInstance().getToastManager().add(new SimpleToast(title, description, COLOR_TITLE));
     }
 
     public static void error(Text title, Text description) {
-        MinecraftClient.getInstance().getToastManager().add(new SimpleToast(title, description, 0xFFFF5555));
+        MinecraftClient.getInstance().getToastManager().add(new SimpleToast(title, description, COLOR_TITLE_ERROR));
     }
 
     public static UploadToast showUpload(Text title, Text subtitle) {
@@ -33,20 +43,32 @@ public final class Toasts {
         return toast;
     }
 
-    private static void drawBackground(DrawContext context) {
-        context.drawTexture(TOAST_TEXTURE, 0, 0, 0, 0, 160, 32, 256, 256);
+    private static void drawAchievementBackground(DrawContext context) {
+        context.fill(0, 0, WIDTH, HEIGHT, COLOR_BORDER);
+        context.fill(1, 1, WIDTH - 1, HEIGHT - 1, COLOR_BG);
+        context.fill(2, 2, WIDTH - 2, HEIGHT - 2, COLOR_BG_INNER);
+        context.fill(2, 2, WIDTH - 2, 12, COLOR_BG_TOP);
+    }
+
+    private static void drawAchievementFrame(DrawContext context, Text title, int titleColor, Text description, int descriptionColor) {
+        drawAchievementBackground(context);
+        var renderer = MinecraftClient.getInstance().textRenderer;
+        context.drawText(renderer, title, 8, 5, titleColor, false);
+        if (description != null) {
+            context.drawText(renderer, description, 8, 18, descriptionColor, false);
+        }
     }
 
     public static final class SimpleToast implements Toast {
         private final Text title;
         private final Text description;
-        private final int color;
+        private final int titleColor;
         private long start = -1L;
 
-        private SimpleToast(Text title, Text description, int color) {
+        private SimpleToast(Text title, Text description, int titleColor) {
             this.title = title;
             this.description = description;
-            this.color = color;
+            this.titleColor = titleColor;
         }
 
         @Override
@@ -54,12 +76,7 @@ public final class Toasts {
             if (start < 0L) {
                 start = time;
             }
-            drawBackground(context);
-            var renderer = MinecraftClient.getInstance().textRenderer;
-            context.drawText(renderer, title, 8, 7, color, false);
-            if (description != null) {
-                context.drawText(renderer, description, 8, 18, 0xFFDDDDDD, false);
-            }
+            drawAchievementFrame(context, title, titleColor, description, COLOR_TEXT);
             return (time - start) > 3_500L ? Visibility.HIDE : Visibility.SHOW;
         }
     }
@@ -93,12 +110,8 @@ public final class Toasts {
             if (start < 0L) {
                 start = time;
             }
-            drawBackground(context);
-            var renderer = MinecraftClient.getInstance().textRenderer;
-            context.drawText(renderer, title, 8, 7, 0xFFFFFFFF, false);
-            if (subtitle != null) {
-                context.drawText(renderer, subtitle, 8, 18, 0xFFDDDDDD, false);
-            }
+            int titleColor = done ? (success ? COLOR_TITLE : COLOR_TITLE_ERROR) : COLOR_TITLE;
+            drawAchievementFrame(context, title, titleColor, subtitle, COLOR_TEXT_DIM);
 
             int barX = 8;
             int barY = 28;
@@ -139,17 +152,14 @@ public final class Toasts {
             if (start < 0L) {
                 start = time;
             }
-            drawBackground(context);
-            var renderer = MinecraftClient.getInstance().textRenderer;
-            context.drawText(renderer, title, 8, 7, 0xFFFFFFFF, false);
-
             long elapsed = time - start;
             boolean showResult = done && elapsed >= 800L;
             Text line = showResult
                     ? (resultMessage == null ? Text.literal(ok ? "OK" : "ERROR") : resultMessage)
                     : checkingMessage;
-            int color = showResult ? (ok ? 0xFF55FF55 : 0xFFFF5555) : 0xFFDDDDDD;
-            context.drawText(renderer, line, 8, 18, color, false);
+            int titleColor = showResult ? (ok ? COLOR_TITLE : COLOR_TITLE_ERROR) : COLOR_TITLE;
+            int descriptionColor = showResult ? (ok ? 0xFF88FF88 : 0xFFFF7D7D) : COLOR_TEXT_DIM;
+            drawAchievementFrame(context, title, titleColor, line, descriptionColor);
 
             if (showResult && !soundPlayed) {
                 soundPlayed = true;

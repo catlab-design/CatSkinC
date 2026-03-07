@@ -19,10 +19,16 @@ public final class InventoryEntityRendererCompat {
         if (entity == null) {
             return;
         }
-        if (tryDrawNew(context, x1, y1, x2, y2, mouseX, mouseY, entity)) {
+        int previewHeight = Math.max(1, y2 - y1);
+        int verticalOffset = Math.max(4, previewHeight / 14);
+        int appliedOffset = Math.min(verticalOffset, Math.max(0, y1));
+        int y1Adjusted = y1 - appliedOffset;
+        int y2Adjusted = y2 - appliedOffset;
+
+        if (tryDrawNew(context, x1, y1Adjusted, x2, y2Adjusted, mouseX, mouseY, entity)) {
             return;
         }
-        tryDrawLegacy(context, x1, y1, x2, y2, mouseX, mouseY, entity);
+        tryDrawLegacy(context, x1, y1Adjusted, x2, y2Adjusted, mouseX, mouseY, entity);
     }
 
     private static boolean tryDrawNew(DrawContext context, int x1, int y1, int x2, int y2, int mouseX, int mouseY, LivingEntity entity) {

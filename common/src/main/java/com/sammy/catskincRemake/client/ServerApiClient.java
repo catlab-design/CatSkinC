@@ -80,7 +80,7 @@ public final class ServerApiClient {
         }
     }
 
-    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(r -> {
+    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(4, r -> {
         Thread thread = new Thread(r, "CatSkinC-Api");
         thread.setDaemon(true);
         return thread;
@@ -89,7 +89,7 @@ public final class ServerApiClient {
     private static final ProgressListener NO_OP_PROGRESS = new ProgressListener() {
     };
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
-    private static final String DEFAULT_BASE_URL = "http://127.0.0.1:2555";
+    private static final String DEFAULT_BASE_URL = "https://storage-api.catskin.space";
     private static final String DEFAULT_PATH_UPLOAD = "/upload";
     private static final String DEFAULT_PATH_SELECT = "/select";
     private static final String DEFAULT_PATH_SELECTED = "/selected";
@@ -106,8 +106,7 @@ public final class ServerApiClient {
     private static final String HEADER_TIMESTAMP = "x-catskinc-timestamp";
     private static final String HEADER_NONCE = "x-catskinc-nonce";
     private static final String HEADER_SIGNATURE = "x-catskinc-signature";
-    private static final String SHA256_EMPTY_HEX =
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    private static final String SHA256_EMPTY_HEX = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     private static volatile String authToken;
 
@@ -116,6 +115,12 @@ public final class ServerApiClient {
     private static final ConcurrentHashMap<UUID, CachedSelected> SELECTED_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, CompletableFuture<SelectedSkin>> SELECTED_IN_FLIGHT = new ConcurrentHashMap<>();
     private static volatile CachedPing cachedPing;
+
+    // Circuit breaker: stops polling when server is unreachable
+    private static volatile int consecutiveFailures;
+    private static volatile long circuitOpenUntilMs;
+    private static final int CIRCUIT_BREAKER_THRESHOLD = 3;
+    private static final long CIRCUIT_BREAKER_COOLDOWN_MS = 30_000L;
 
     private record RuntimeConfig(
             String baseUrl,
@@ -271,7 +276,8 @@ public final class ServerApiClient {
 
                 boolean includeLegacyMouth = mouthOpenBytes != null;
                 long multipartOverhead = estimateMultipartOverhead(
-                        boundary, playerUuid, slim, mouthOpenBytes != null, mouthCloseBytes != null, includeLegacyMouth);
+                        boundary, playerUuid, slim, mouthOpenBytes != null, mouthCloseBytes != null,
+                        includeLegacyMouth);
                 long totalBytes = skinBytes.length
                         + (mouthOpenBytes == null ? 0L : mouthOpenBytes.length)
                         + (mouthCloseBytes == null ? 0L : mouthCloseBytes.length)
@@ -488,9 +494,17 @@ public final class ServerApiClient {
             ModLog.trace("Fetch selected skipped: uuid is null");
             return CompletableFuture.completedFuture(null);
         }
+
+        // Circuit breaker: skip if server is known to be unreachable
+        long now = System.currentTimeMillis();
+        if (circuitOpenUntilMs > now) {
+            ModLog.trace("Fetch selected skipped: circuit breaker open (retry in {} ms)",
+                    circuitOpenUntilMs - now);
+            return CompletableFuture.completedFuture(null);
+        }
+
         RuntimeConfig cfg = runtimeConfig();
 
-        long now = System.currentTimeMillis();
         CachedSelected cached = SELECTED_CACHE.get(playerUuid);
         if (cached != null && (now - cached.cachedAtMs) <= cfg.selectedCacheTtlMs) {
             ModLog.trace("Fetch selected cache hit: {}", playerUuid);
@@ -507,7 +521,8 @@ public final class ServerApiClient {
             HttpURLConnection connection = null;
             try {
                 String requestId = newRequestId();
-                String requestPath = cfg.pathSelected + (cfg.pathSelected.contains("?") ? "&uuid=" : "?uuid=") + playerUuid;
+                String requestPath = cfg.pathSelected + (cfg.pathSelected.contains("?") ? "&uuid=" : "?uuid=")
+                        + playerUuid;
                 ModLog.trace("Fetch selected request: {}", requestPath);
                 connection = open("GET", requestPath, null, SHA256_EMPTY_HEX, requestId, true);
                 int code = responseCode(connection, requestId);
@@ -517,6 +532,10 @@ public final class ServerApiClient {
                             bodyPreview(body));
                     return null;
                 }
+
+                // Success: reset circuit breaker
+                consecutiveFailures = 0;
+                circuitOpenUntilMs = 0L;
 
                 String url = jsonString(body, "url");
                 if (url == null || url.isBlank()) {
@@ -544,7 +563,15 @@ public final class ServerApiClient {
                         playerUuid, slim, url, mouthOpenUrl, mouthCloseUrl);
                 return selectedSkin;
             } catch (Exception exception) {
-                ModLog.error("Fetch selected failed for uuid=" + playerUuid, exception);
+                int failures = ++consecutiveFailures;
+                if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+                    circuitOpenUntilMs = System.currentTimeMillis() + CIRCUIT_BREAKER_COOLDOWN_MS;
+                    ModLog.warn("API unreachable ({} failures), circuit breaker open for {} s: {}",
+                            failures, CIRCUIT_BREAKER_COOLDOWN_MS / 1000, exception.getMessage());
+                } else {
+                    ModLog.debug("Fetch selected failed ({}/{}): {}",
+                            failures, CIRCUIT_BREAKER_THRESHOLD, exception.getMessage());
+                }
                 return null;
             } finally {
                 disconnectQuietly(connection);
@@ -806,7 +833,8 @@ public final class ServerApiClient {
             connection.setRequestProperty("Content-Type", contentType);
         }
 
-        if (apiRequest && authToken != null && !authToken.isBlank() && hostPortKey(requestUrl).equals(cfg.apiHostPort)) {
+        if (apiRequest && authToken != null && !authToken.isBlank()
+                && hostPortKey(requestUrl).equals(cfg.apiHostPort)) {
             connection.setRequestProperty("Authorization", "Bearer " + authToken);
         }
 
@@ -958,8 +986,7 @@ public final class ServerApiClient {
         if (includeMouthOpen) {
             overhead += "\r\n".length();
             overhead += ("--" + boundary + "\r\n").length();
-            overhead +=
-                    "Content-Disposition: form-data; name=\"mouth_open\"; filename=\"mouth-open.png\"\r\n".length();
+            overhead += "Content-Disposition: form-data; name=\"mouth_open\"; filename=\"mouth-open.png\"\r\n".length();
             overhead += "Content-Type: image/png\r\n\r\n".length();
         }
         if (includeLegacyMouth) {
@@ -971,8 +998,8 @@ public final class ServerApiClient {
         if (includeMouthClose) {
             overhead += "\r\n".length();
             overhead += ("--" + boundary + "\r\n").length();
-            overhead +=
-                    "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"\r\n".length();
+            overhead += "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"\r\n"
+                    .length();
             overhead += "Content-Type: image/png\r\n\r\n".length();
         }
         // closing boundary
@@ -993,6 +1020,8 @@ public final class ServerApiClient {
         SELECTED_CACHE.clear();
         SELECTED_IN_FLIGHT.clear();
         cachedPing = null;
+        consecutiveFailures = 0;
+        circuitOpenUntilMs = 0L;
         stopSse();
     }
 

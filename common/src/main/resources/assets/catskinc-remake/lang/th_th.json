@@ -52,6 +52,8 @@
   "toast.cloud.checking": "Checking connection...",
   "toast.cloud.connected": "Connected",
   "toast.cloud.failed": "Connection failed",
+  "toast.update.available.title": "มีอัปเดตม็อด",
+  "toast.update.available.message": "CatSkinC เวอร์ชัน %s พร้อมให้ใช้งาน",
 
   "toast.error.not_png": "File must be a .png",
   "toast.error.drag_not_png": "Dragged file is not a .png",

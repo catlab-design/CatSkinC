@@ -2,7 +2,7 @@ package com.sammy.catskincRemake.client;
 
 public final class ClientConfig {
     public int openUiKey = 75;
-    public long refreshIntervalMs = 1_000L;
+    public long refreshIntervalMs = 15_000L;
     public int ensureIntervalTicks = 20;
     public int ensureLimitPerPass = 16;
 
@@ -10,7 +10,7 @@ public final class ClientConfig {
     public int voiceAmplitudeThreshold = 180;
     public long voiceHoldMs = 420L;
 
-    public String apiBaseUrl = "http://127.0.0.1:2555";
+    public String apiBaseUrl = "https://storage-api.catskin.space";
     public String pathUpload = "/upload";
     public String pathSelect = "/select";
     public String pathSelected = "/selected";
@@ -62,11 +62,11 @@ public final class ClientConfig {
     private static String sanitizeBaseUrl(String value) {
         String normalized = sanitizeNullableString(value);
         if (normalized.isEmpty()) {
-            return "http://127.0.0.1:2555";
+            return "https://storage-api.catskin.space";
         }
         String lower = normalized.toLowerCase(java.util.Locale.ROOT);
         if (!(lower.startsWith("http://") || lower.startsWith("https://"))) {
-            return "http://127.0.0.1:2555";
+            return "https://storage-api.catskin.space";
         }
         while (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);

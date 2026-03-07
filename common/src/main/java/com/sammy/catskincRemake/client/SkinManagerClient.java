@@ -28,7 +28,7 @@ public final class SkinManagerClient {
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_CLOSE_URL = new ConcurrentHashMap<>();
 
-    private static volatile long refreshIntervalMs = 1_000L;
+    private static volatile long refreshIntervalMs = 15_000L;
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "CatSkinC-SkinManager");
@@ -178,54 +178,70 @@ public final class SkinManagerClient {
                 return;
             }
             client.execute(() -> {
-                if (images.skinImage == null) {
-                    ModLog.warn("Skin image download returned null for {}", uuid);
+                try {
+                    if (images.skinImage == null) {
+                        ModLog.warn("Skin image download returned null for {}", uuid);
+                        closeQuietly(images.mouthOpenImage);
+                        closeQuietly(images.mouthCloseImage);
+                        return;
+                    }
+
+                    NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
+                            "mouth-open");
+                    NativeImage idleImage = createOverlayImage(uuid, images.skinImage, images.mouthCloseImage,
+                            "mouth-close");
+                    if (images.mouthOpenRequested && talkingImage == null) {
+                        ModLog.warn("Mouth-open texture missing after download for {}", uuid);
+                    }
+                    if (images.mouthCloseRequested && idleImage == null) {
+                        ModLog.warn("Mouth-close texture missing after download for {}", uuid);
+                    }
+                    TextureManager textureManager = client.getTextureManager();
+
+                    // Register new textures BEFORE destroying old ones to prevent
+                    // race condition where render thread accesses a freed texture.
+                    Identifier baseId = idFor(uuid);
+                    Identifier oldBaseId = BASE_CACHE.get(uuid);
+                    NativeImageBackedTexture baseTexture = new NativeImageBackedTexture(images.skinImage);
+                    baseTexture.setFilter(false, false);
+                    textureManager.registerTexture(baseId, baseTexture);
+                    BASE_CACHE.put(uuid, baseId);
+                    if (oldBaseId != null && !oldBaseId.equals(baseId)) {
+                        textureManager.destroyTexture(oldBaseId);
+                    }
+
+                    Identifier idleId = idleIdFor(uuid);
+                    Identifier oldIdleId = IDLE_CACHE.remove(uuid);
+                    if (idleImage != null) {
+                        NativeImageBackedTexture idleTexture = new NativeImageBackedTexture(idleImage);
+                        idleTexture.setFilter(false, false);
+                        textureManager.registerTexture(idleId, idleTexture);
+                        IDLE_CACHE.put(uuid, idleId);
+                    }
+                    if (oldIdleId != null && !oldIdleId.equals(idleId)) {
+                        textureManager.destroyTexture(oldIdleId);
+                    }
+
+                    Identifier talkingId = talkingIdFor(uuid);
+                    Identifier oldTalkingId = TALKING_CACHE.remove(uuid);
+                    if (talkingImage != null) {
+                        NativeImageBackedTexture talkingTexture = new NativeImageBackedTexture(talkingImage);
+                        talkingTexture.setFilter(false, false);
+                        textureManager.registerTexture(talkingId, talkingTexture);
+                        TALKING_CACHE.put(uuid, talkingId);
+                    }
+                    if (oldTalkingId != null && !oldTalkingId.equals(talkingId)) {
+                        textureManager.destroyTexture(oldTalkingId);
+                    }
+
+                    ModLog.trace("Texture applied for {} (idleVariant={}, talkingVariant={})",
+                            uuid, idleImage != null, talkingImage != null);
+                } catch (Exception exception) {
+                    ModLog.error("Texture update failed for uuid=" + uuid, exception);
+                    closeQuietly(images.skinImage);
                     closeQuietly(images.mouthOpenImage);
                     closeQuietly(images.mouthCloseImage);
-                    return;
                 }
-
-                NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
-                        "mouth-open");
-                NativeImage idleImage = createOverlayImage(uuid, images.skinImage, images.mouthCloseImage,
-                        "mouth-close");
-                if (images.mouthOpenRequested && talkingImage == null) {
-                    ModLog.warn("Mouth-open texture missing after download for {}", uuid);
-                }
-                if (images.mouthCloseRequested && idleImage == null) {
-                    ModLog.warn("Mouth-close texture missing after download for {}", uuid);
-                }
-                TextureManager textureManager = client.getTextureManager();
-
-                Identifier baseId = idFor(uuid);
-                textureManager.destroyTexture(baseId);
-                NativeImageBackedTexture baseTexture = new NativeImageBackedTexture(images.skinImage);
-                baseTexture.setFilter(false, false);
-                textureManager.registerTexture(baseId, baseTexture);
-                BASE_CACHE.put(uuid, baseId);
-
-                Identifier idleId = idleIdFor(uuid);
-                textureManager.destroyTexture(idleId);
-                IDLE_CACHE.remove(uuid);
-                if (idleImage != null) {
-                    NativeImageBackedTexture idleTexture = new NativeImageBackedTexture(idleImage);
-                    idleTexture.setFilter(false, false);
-                    textureManager.registerTexture(idleId, idleTexture);
-                    IDLE_CACHE.put(uuid, idleId);
-                }
-
-                Identifier talkingId = talkingIdFor(uuid);
-                textureManager.destroyTexture(talkingId);
-                TALKING_CACHE.remove(uuid);
-                if (talkingImage != null) {
-                    NativeImageBackedTexture talkingTexture = new NativeImageBackedTexture(talkingImage);
-                    talkingTexture.setFilter(false, false);
-                    textureManager.registerTexture(talkingId, talkingTexture);
-                    TALKING_CACHE.put(uuid, talkingId);
-                }
-
-                ModLog.trace("Texture applied for {} (idleVariant={}, talkingVariant={})",
-                        uuid, idleImage != null, talkingImage != null);
             });
         }, EXECUTOR);
     }
@@ -419,7 +435,7 @@ public final class SkinManagerClient {
         LAST_MOUTH_OPEN_URL.clear();
         LAST_MOUTH_CLOSE_URL.clear();
         IN_FLIGHT.clear();
-        refreshIntervalMs = 1_000L;
+        refreshIntervalMs = 15_000L;
     }
 
     private record PartialDownloadedImages(NativeImage skinImage, NativeImage mouthOpenImage) {

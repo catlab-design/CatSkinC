@@ -52,6 +52,8 @@
   "toast.cloud.checking": "Checking connection...",
   "toast.cloud.connected": "Connected",
   "toast.cloud.failed": "Connection failed",
+  "toast.update.available.title": "Mod update available",
+  "toast.update.available.message": "CatSkinC %s is available",
 
   "toast.error.not_png": "File must be a .png",
   "toast.error.drag_not_png": "Dragged file is not a .png",

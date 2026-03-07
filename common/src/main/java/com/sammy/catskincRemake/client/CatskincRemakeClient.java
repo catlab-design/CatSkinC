@@ -179,6 +179,15 @@ public final class CatskincRemakeClient {
                     Text.translatable(Boolean.TRUE.equals(ok)
                             ? "toast.cloud.connected"
                             : "toast.cloud.failed").getString())));
+
+            ModrinthVersionChecker.checkForUpdatesAsync().thenAccept(result -> client.execute(() -> {
+                if (!ModrinthVersionChecker.tryMarkNotified(result)) {
+                    return;
+                }
+                Toasts.info(
+                        Text.translatable("toast.update.available.title"),
+                        Text.translatable("toast.update.available.message", result.latestVersion()));
+            }));
         } catch (Exception exception) {
             ModLog.error("Join flow failed", exception);
         }
