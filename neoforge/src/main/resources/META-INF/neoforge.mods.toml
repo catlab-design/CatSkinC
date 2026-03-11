@@ -1,7 +1,7 @@
 modLoader = "javafml"
 loaderVersion = "${javafml_loader_range}"
 #issueTrackerURL = ""
-license = "MIT"
+license = "GPL-3.0-or-later"
 
 [[mods]]
 modId = "catskinc_remake"

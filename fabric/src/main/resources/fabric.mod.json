@@ -10,7 +10,7 @@
   "contact": {
     "homepage": "https://dotpp.xyz"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "icon": "assets/catskinc-remake/icon.png",
   "environment": "client",
   "entrypoints": {
