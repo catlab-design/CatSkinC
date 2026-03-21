@@ -1,19 +1,15 @@
 package com.sammy.catskincRemake.mixin.client;
 
 import com.mojang.authlib.GameProfile;
-import com.sammy.catskincRemake.client.SkinManagerClient;
-import com.sammy.catskincRemake.client.SkinOverrideStore;
-import com.sammy.catskincRemake.client.SkinTextureFactory;
+import com.sammy.catskincRemake.client.PlayerSkinOverrideResolver;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.resources.PlayerSkin;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.UUID;
-import net.minecraft.client.multiplayer.PlayerInfo;
-import net.minecraft.client.resources.DefaultPlayerSkin;
-import net.minecraft.client.resources.PlayerSkin;
-import net.minecraft.resources.ResourceLocation;
 
 @Mixin(value = PlayerInfo.class, priority = 1_000)
 public abstract class PlayerListEntryMixin120 {
@@ -28,35 +24,7 @@ public abstract class PlayerListEntryMixin120 {
         if (uuid == null) {
             return;
         }
-
-        SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
-        ResourceLocation overrideTexture = null;
-        Boolean slimOverride = null;
-        if (entry != null && entry.texture != null) {
-            overrideTexture = entry.texture;
-            slimOverride = entry.slim;
-        } else {
-            ResourceLocation cached = SkinManagerClient.getCached(uuid);
-            if (cached != null) {
-                overrideTexture = cached;
-                slimOverride = SkinManagerClient.isSlimOrNull(uuid);
-            } else {
-                SkinManagerClient.ensureFetch(uuid);
-            }
-        }
-
-        if (overrideTexture == null) {
-            return;
-        }
-
-        PlayerSkin base = cir.getReturnValue();
-        if (base == null) {
-            base = DefaultPlayerSkin.get(uuid);
-        }
-        Object patched = SkinTextureFactory.withTextureAndModel(base, overrideTexture, slimOverride);
-        if (patched instanceof PlayerSkin patchedSkin) {
-            cir.setReturnValue(patchedSkin);
-        }
+        cir.setReturnValue(PlayerSkinOverrideResolver.resolvePlayerSkin(uuid, cir.getReturnValue()));
     }
 
     private UUID getUuid() {

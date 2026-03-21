@@ -34,6 +34,7 @@ import com.sammy.catskincRemake.mixin.client.PlayerEntityAccessor;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -48,6 +49,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.resources.DefaultPlayerSkin;
+import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
@@ -57,6 +60,8 @@ import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 public final class SkinUploadScreen
 extends Screen {
+    private static final UUID PREVIEW_SLIM_UUID = findPreviewProfileUuid(true, "catskinc-preview-slim");
+    private static final UUID PREVIEW_WIDE_UUID = findPreviewProfileUuid(false, "catskinc-preview-wide");
     private static final int COLOR_BG_BASE = -871428337;
     private static final int COLOR_BG_TOP = 0x40222222;
     private static final int COLOR_BG_BOTTOM = 0x54141414;
@@ -686,8 +691,14 @@ extends Screen {
             int n15 = Math.min(n13 - 16, 28);
             int n16 = n11 + 6;
             int n17 = n10 + (n13 - n15) / 2;
-            if (historyEntry.thumbId != null) {
+            if (historyEntry.previewSkinId != null) {
+                drawContext.enableScissor(n16 - 1, n17 - 1, n16 + n15 + 1, n17 + n15 + 1);
+                PlayerHeadRendererCompat.drawHead(drawContext, historyEntry.previewSkinId, n16, n17, n15);
+                drawContext.disableScissor();
+            } else if (historyEntry.thumbId != null) {
                 drawContext.blit(historyEntry.thumbId, n16, n17, 0.0f, 0.0f, n15, n15, n15, n15);
+            }
+            if (historyEntry.previewSkinId != null || historyEntry.thumbId != null) {
                 SkinUploadScreen.drawRectBorder(drawContext, n16 - 1, n17 - 1, n15 + 2, n15 + 2, 0x36666666);
             }
             n7 = 12;
@@ -810,7 +821,7 @@ extends Screen {
                     }
                     ModSounds.play(ModSounds.UI_COMPLETE);
                     if (minecraftClient.player != null) {
-                        SkinOverrideStore.clear(minecraftClient.player.getUUID());
+                        SkinUploadScreen.this.applyImmediateLocalSkinSelection(minecraftClient, bl);
                         ServerApiClient.selectSkin(minecraftClient.player.getUUID(), string, bl);
                         SkinManagerClient.setSlim(minecraftClient.player.getUUID(), bl);
                         SkinManagerClient.refresh(minecraftClient.player.getUUID());
@@ -1052,8 +1063,11 @@ extends Screen {
             this.previewPlayer = null;
             return;
         }
+        if (this.previewPlayer != null) {
+            SkinOverrideStore.clear(this.previewPlayer.getUUID());
+        }
         this.previewSlim = this.slimChecked;
-        GameProfile gameProfile = new GameProfile(UUID.randomUUID(), "");
+        GameProfile gameProfile = new GameProfile(previewProfileUuid(this.previewSlim), "");
         this.previewPlayer = new PreviewRemotePlayer(minecraftClient.level, gameProfile);
         this.previewPlayer.setCustomNameVisible(false);
         this.previewPlayer.setPose(Pose.STANDING);
@@ -1069,6 +1083,35 @@ extends Screen {
             ModLog.trace("Preview player model part update failed: {}", exception.getMessage());
         }
         SkinOverrideStore.put(this.previewPlayer.getUUID(), this.previewId, this.previewSlim);
+    }
+
+    private void applyImmediateLocalSkinSelection(Minecraft minecraftClient, boolean slim) {
+        if (minecraftClient == null || minecraftClient.player == null || this.selectedFile == null) {
+            return;
+        }
+        UUID uuid = minecraftClient.player.getUUID();
+        SkinOverrideStore.clear(uuid);
+        try {
+            SkinOverrideStore.putManagedFromFile(uuid, this.selectedFile, slim);
+        }
+        catch (Exception exception) {
+            ModLog.warn("Failed to apply immediate local skin selection for {}", uuid, exception);
+        }
+    }
+
+    private static UUID previewProfileUuid(boolean slim) {
+        return slim ? PREVIEW_SLIM_UUID : PREVIEW_WIDE_UUID;
+    }
+
+    private static UUID findPreviewProfileUuid(boolean slim, String seedPrefix) {
+        PlayerSkin.Model targetModel = slim ? PlayerSkin.Model.SLIM : PlayerSkin.Model.WIDE;
+        for (int attempt = 0; attempt < 256; attempt++) {
+            UUID candidate = UUID.nameUUIDFromBytes((seedPrefix + "-" + attempt).getBytes(StandardCharsets.UTF_8));
+            if (DefaultPlayerSkin.get(candidate).model() == targetModel) {
+                return candidate;
+            }
+        }
+        return UUID.nameUUIDFromBytes((seedPrefix + "-fallback").getBytes(StandardCharsets.UTF_8));
     }
 
     private void disposePreview() {
@@ -1124,8 +1167,15 @@ extends Screen {
     private void disposeHistory() {
         Minecraft minecraftClient = Minecraft.getInstance();
         for (HistoryEntry historyEntry : this.history) {
-            if (historyEntry.thumbId == null || minecraftClient == null) continue;
-            minecraftClient.getTextureManager().release(historyEntry.thumbId);
+            if (minecraftClient == null) {
+                continue;
+            }
+            if (historyEntry.thumbId != null) {
+                minecraftClient.getTextureManager().release(historyEntry.thumbId);
+            }
+            if (historyEntry.previewSkinId != null) {
+                minecraftClient.getTextureManager().release(historyEntry.previewSkinId);
+            }
         }
         this.history.clear();
     }
@@ -1143,14 +1193,18 @@ extends Screen {
                 NativeImage nativeImage = NativeImage.read((InputStream)fileInputStream);
                 int n = nativeImage.getWidth();
                 int n2 = nativeImage.getHeight();
-                NativeImage nativeImage2 = SkinUploadScreen.createHeadThumbnail(nativeImage, 64);
-                nativeImage.close();
+                NativeImage nativeImage2 = SkinHeadThumbnailFactory.createIsometricHeadThumbnail(nativeImage, 64);
                 DynamicTexture nativeImageBackedTexture = new DynamicTexture(nativeImage2);
                 nativeImageBackedTexture.setFilter(false, false);
                 ResourceLocation identifier = Identifiers.mod("thumb/" + System.nanoTime());
                 Minecraft.getInstance().getTextureManager().register(identifier, (AbstractTexture)nativeImageBackedTexture);
+                DynamicTexture nativeImageBackedTexture2 = new DynamicTexture(nativeImage);
+                nativeImageBackedTexture2.setFilter(false, false);
+                ResourceLocation identifier2 = Identifiers.mod("preview/" + System.nanoTime());
+                Minecraft.getInstance().getTextureManager().register(identifier2, (AbstractTexture)nativeImageBackedTexture2);
                 HistoryEntry historyEntry = new HistoryEntry(file2);
                 historyEntry.thumbId = identifier;
+                historyEntry.previewSkinId = identifier2;
                 historyEntry.width = n;
                 historyEntry.height = n2;
                 this.history.add(historyEntry);
@@ -1174,6 +1228,9 @@ extends Screen {
         }
         if (historyEntry.thumbId != null) {
             Minecraft.getInstance().getTextureManager().release(historyEntry.thumbId);
+        }
+        if (historyEntry.previewSkinId != null) {
+            Minecraft.getInstance().getTextureManager().release(historyEntry.previewSkinId);
         }
         if (this.selectedFile != null && this.selectedFile.equals(historyEntry.file)) {
             this.selectedFile = null;
@@ -1592,6 +1649,7 @@ extends Screen {
     private static class HistoryEntry {
         final File file;
         ResourceLocation thumbId;
+        ResourceLocation previewSkinId;
         int width;
         int height;
 
