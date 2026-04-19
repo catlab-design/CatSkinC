@@ -160,7 +160,9 @@ public final class CatskincRemakeClient {
                     return;
                 }
                 client.execute(() -> {
-                    if (event.slim != null) {
+                    boolean isClearEvent = event.url == null || event.url.isBlank()
+                            || event.id == null || event.id.isBlank();
+                    if (event.slim != null && !isClearEvent) {
                         SkinManagerClient.setSlim(event.uuid, event.slim);
                     }
                     SkinManagerClient.forceFetch(event.uuid);

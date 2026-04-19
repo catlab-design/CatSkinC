@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
         id = "catskinc_remake",
         name = "CatSkinC Remake Voice Bridge",
         scope = AddonLoaderScope.SERVER,
-        version = "2.0.1",
+        version = "2.0.2",
         authors = { "Q Team Studio" }
 )
 public final class PlasmoVoiceServerBridgeAddon implements AddonInitializer {

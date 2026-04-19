@@ -20,7 +20,7 @@ import su.plo.voice.proto.data.player.VoicePlayerInfo;
 
 import java.util.UUID;
 
-@Addon(id = "catskinc_remake", name = "CatSkinC Remake Voice Bridge", scope = AddonLoaderScope.CLIENT, version = "2.0.1", authors = {
+@Addon(id = "catskinc_remake", name = "CatSkinC Remake Voice Bridge", scope = AddonLoaderScope.CLIENT, version = "2.0.2", authors = {
         "Q Team Studio" })
 public final class PlasmoVoiceBridgeAddon implements AddonInitializer {
     @InjectPlasmoVoice

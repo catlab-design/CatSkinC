@@ -13,8 +13,8 @@ final class ModrinthVersionCheckerTest {
                 {
                   "project": "catskinc",
                   "current": "2.0.0",
-                  "latest": "2.0.1",
-                  "latestName": "CatSkinC 2.0.1",
+                  "latest": "2.0.2",
+                  "latestName": "CatSkinC 2.0.2",
                   "updateAvailable": true,
                   "url": "https://modrinth.com/mod/catskinc/version/demo"
                 }
@@ -24,8 +24,8 @@ final class ModrinthVersionCheckerTest {
 
         assertTrue(result.updateAvailable());
         assertEquals("2.0.0", result.currentVersion());
-        assertEquals("2.0.1", result.latestVersion());
-        assertEquals("CatSkinC 2.0.1", result.latestName());
+        assertEquals("2.0.2", result.latestVersion());
+        assertEquals("CatSkinC 2.0.2", result.latestName());
     }
 
     @Test
@@ -47,8 +47,8 @@ final class ModrinthVersionCheckerTest {
                     "date_published": "2026-03-03T00:00:00Z"
                   },
                   {
-                    "name": "CatSkinC 2.0.1",
-                    "version_number": "2.0.1",
+                    "name": "CatSkinC 2.0.2",
+                    "version_number": "2.0.2",
                     "version_type": "release",
                     "status": "listed",
                     "date_published": "2026-03-02T00:00:00Z"
@@ -60,8 +60,8 @@ final class ModrinthVersionCheckerTest {
 
         assertTrue(result.updateAvailable());
         assertEquals("2.0.0", result.currentVersion());
-        assertEquals("2.0.1", result.latestVersion());
-        assertEquals("CatSkinC 2.0.1", result.latestName());
+        assertEquals("2.0.2", result.latestVersion());
+        assertEquals("CatSkinC 2.0.2", result.latestName());
     }
 
     @Test

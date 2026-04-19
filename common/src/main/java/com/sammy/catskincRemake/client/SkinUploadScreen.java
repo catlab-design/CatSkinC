@@ -1515,12 +1515,12 @@ extends Screen {
     private static boolean isValidSize(int n, int n2) {
         boolean bl = n == n2;
         boolean bl2 = (n & n - 1) == 0;
-        boolean bl3 = n >= 64 && n <= 4096;
+        boolean bl3 = n >= 64 && n <= 8192;
         return bl && bl2 && bl3;
     }
 
     private static boolean isValidOverlaySize(int n, int n2) {
-        return n >= 8 && n2 >= 8 && n <= 4096 && n2 <= 4096;
+        return n >= 8 && n2 >= 8 && n <= 8192 && n2 <= 8192;
     }
 
     private static int scaled(int n, float f) {

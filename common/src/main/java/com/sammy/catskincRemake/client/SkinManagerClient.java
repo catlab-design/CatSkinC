@@ -341,6 +341,9 @@ public final class SkinManagerClient {
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
         LAST_MOUTH_CLOSE_URL.remove(uuid);
+        // Only remove from the authoritative SLIM map, not PREFERRED_SLIM.
+        // PREFERRED_SLIM preserves the player's known arm model so that
+        // after clearing a skin the correct slim/wide arms are maintained.
         SLIM.remove(uuid);
         Minecraft client = Minecraft.getInstance();
         if (client != null) {
