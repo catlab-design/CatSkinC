@@ -128,6 +128,12 @@ public final class ServerApiClient {
     private static final long SESSION_TOKEN_REFRESH_MARGIN_MS = 60_000L;
     private static final ConcurrentHashMap<UUID, CompletableFuture<String>> AUTH_IN_FLIGHT =
             new ConcurrentHashMap<>();
+    // Mojang's joinServer endpoint is rate-limited; calling it too often returns
+    // "RateLimiter disallowed request". Enforce a minimum gap between attempts so
+    // upload retries cannot spam it.
+    private static final long JOIN_SERVER_COOLDOWN_MS = 5_000L;
+    private static final ConcurrentHashMap<UUID, Long> LAST_JOIN_ATTEMPT_MS =
+            new ConcurrentHashMap<>();
 
     private record CachedSessionToken(String token, long expiresAtMs) {
         boolean isValid() {
@@ -233,6 +239,17 @@ public final class ServerApiClient {
             } catch (Exception ex) {
                 ModLog.warn("Session token acquisition failed before upload: {}", ex.getMessage());
                 sessionToken = null;
+            }
+            // If the first attempt produced no token, retry once with a forced
+            // refresh (drops any stale/expired cached token and re-runs the
+            // Mojang joinServer flow) so the player does not have to restart.
+            if (sessionToken == null || sessionToken.isBlank()) {
+                try {
+                    sessionToken = acquireSessionTokenAsync(playerUuid, true).get();
+                } catch (Exception ex) {
+                    ModLog.warn("Session token force-refresh failed before upload: {}", ex.getMessage());
+                    sessionToken = null;
+                }
             }
             RuntimeConfig cfg = runtimeConfig();
             if (file == null || !file.isFile()) {
@@ -354,8 +371,12 @@ public final class ServerApiClient {
                     return;
                 }
                 if (code == 401) {
+                    // Session token rejected — clear cache and proactively re-auth
+                    // in the background so the next upload attempt succeeds without
+                    // a game restart.
                     clearSessionToken(playerUuid);
-                    ModLog.warn("Upload 401: session token rejected for uuid={}", playerUuid);
+                    acquireSessionTokenAsync(playerUuid, true);
+                    ModLog.warn("Upload 401: session token rejected for uuid={}, re-authenticating", playerUuid);
                     listener.onDone(false, httpErrorMessage(body, code));
                     return;
                 }
@@ -875,8 +896,22 @@ public final class ServerApiClient {
     // -------------------------------------------------------------------------
 
     public static CompletableFuture<String> acquireSessionTokenAsync(UUID playerUuid) {
+        return acquireSessionTokenAsync(playerUuid, false);
+    }
+
+    /**
+     * Acquire a session token, optionally bypassing the cache.
+     *
+     * @param forceRefresh when true, drops any cached token and re-runs the
+     *                     Mojang joinServer + /auth/session flow. Used to recover
+     *                     from a 401 without requiring a game restart.
+     */
+    public static CompletableFuture<String> acquireSessionTokenAsync(UUID playerUuid, boolean forceRefresh) {
         if (playerUuid == null) {
             return CompletableFuture.completedFuture(null);
+        }
+        if (forceRefresh) {
+            SESSION_TOKEN_CACHE.remove(playerUuid);
         }
         CachedSessionToken cached = SESSION_TOKEN_CACHE.get(playerUuid);
         if (cached != null && cached.isValid()) {
@@ -907,6 +942,16 @@ public final class ServerApiClient {
         }
         String username = user.getName();
         String accessToken = user.getAccessToken();
+
+        // Throttle Mojang joinServer to avoid "RateLimiter disallowed request".
+        long now = System.currentTimeMillis();
+        Long last = LAST_JOIN_ATTEMPT_MS.get(playerUuid);
+        if (last != null && now - last < JOIN_SERVER_COOLDOWN_MS) {
+            ModLog.debug("Auth skipped: joinServer cooldown active for {} ({} ms left)",
+                    playerUuid, JOIN_SERVER_COOLDOWN_MS - (now - last));
+            return null;
+        }
+        LAST_JOIN_ATTEMPT_MS.put(playerUuid, now);
 
         byte[] serverIdBytes = new byte[20];
         new SecureRandom().nextBytes(serverIdBytes);
