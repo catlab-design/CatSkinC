@@ -3,7 +3,9 @@ package com.sammy.catskincRemake.client;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.authlib.exceptions.AuthenticationException;
 import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.Minecraft;
 import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -21,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.util.Base64;
 import java.util.HashSet;
@@ -99,6 +102,10 @@ public final class ServerApiClient {
     private static final long DEFAULT_PING_CACHE_TTL_MS = 10_000L;
     private static final int DEFAULT_MAX_JSON_BYTES = 256 * 1024;
     private static final int DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+    private static final boolean DEFAULT_ALLOW_INSECURE_HTTP = false;
+    private static final String DEFAULT_REQUEST_SIGNING_KEY = "";
+    private static final String DEFAULT_TLS_PIN_SHA256 = "";
+    private static final String DEFAULT_ALLOWED_ASSET_HOSTS = "";
 
     private static final String HEADER_REQUEST_ID = "x-catskinc-request-id";
     private static final String HEADER_CONTENT_SHA256 = "x-catskinc-content-sha256";
@@ -107,6 +114,26 @@ public final class ServerApiClient {
     private static final String HEADER_SIGNATURE = "x-catskinc-signature";
     private static final String SHA256_EMPTY_HEX =
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    /** Protocol version this client speaks. Must match server MIN_PROTOCOL_VERSION. */
+    public static final int CLIENT_PROTOCOL_VERSION = 2;
+    private static final String HEADER_PROTOCOL = "x-catskinc-protocol";
+    /** Header carrying the per-player session token on write requests. */
+    private static final String HEADER_SESSION = "x-catskinc-session";
+    /** Set to true when the server rejects us with 426 CLIENT_UPDATE_REQUIRED. */
+    private static volatile boolean clientOutdated = false;
+
+    private static final ConcurrentHashMap<UUID, CachedSessionToken> SESSION_TOKEN_CACHE =
+            new ConcurrentHashMap<>();
+    private static final long SESSION_TOKEN_REFRESH_MARGIN_MS = 60_000L;
+    private static final ConcurrentHashMap<UUID, CompletableFuture<String>> AUTH_IN_FLIGHT =
+            new ConcurrentHashMap<>();
+
+    private record CachedSessionToken(String token, long expiresAtMs) {
+        boolean isValid() {
+            return System.currentTimeMillis() < expiresAtMs - SESSION_TOKEN_REFRESH_MARGIN_MS;
+        }
+    }
 
     private static volatile String authToken;
 
@@ -145,67 +172,35 @@ public final class ServerApiClient {
     }
 
     private static RuntimeConfig runtimeConfig() {
-        ClientConfig config = ConfigManager.get();
-        config.sanitize();
-        String baseUrl = normalizeBaseUrl(config.apiBaseUrl);
+        String baseUrl = DEFAULT_BASE_URL;
         URL parsedBase;
         try {
             parsedBase = parseUrl(baseUrl);
-        } catch (IOException exception) {
-            baseUrl = DEFAULT_BASE_URL;
-            try {
-                parsedBase = parseUrl(baseUrl);
-            } catch (IOException ignored) {
-                throw new IllegalStateException("Unable to parse default API base URL");
-            }
+        } catch (IOException ignored) {
+            throw new IllegalStateException("Unable to parse default API base URL");
         }
         String apiHostPort = hostPortKey(parsedBase);
 
         Set<String> trustedAssetHostPorts = new HashSet<>();
         trustedAssetHostPorts.add(apiHostPort);
-        for (String part : config.allowedAssetHosts.split("[,;]")) {
-            String cleaned = part == null ? "" : part.trim().toLowerCase(Locale.ROOT);
-            if (!cleaned.isEmpty()) {
-                if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
-                    try {
-                        URL url = parseUrl(cleaned);
-                        trustedAssetHostPorts.add(hostPortKey(url));
-                        trustedAssetHostPorts.add(url.getHost().toLowerCase(Locale.ROOT));
-                    } catch (IOException ignored) {
-                        trustedAssetHostPorts.add(cleaned);
-                    }
-                } else {
-                    trustedAssetHostPorts.add(cleaned);
-                }
-            }
-        }
-
-        String requestSigningKey = firstNonBlank(
-                System.getProperty("catskinc.requestSigningKey"),
-                System.getenv("CATSKINC_REQUEST_SIGNING_KEY"),
-                config.requestSigningKey);
-        String tlsPinSha256 = firstNonBlank(
-                System.getProperty("catskinc.tlsPinSha256"),
-                System.getenv("CATSKINC_TLS_PIN_SHA256"),
-                config.tlsPinSha256).toLowerCase(Locale.ROOT);
 
         return new RuntimeConfig(
                 baseUrl,
-                normalizePath(config.pathUpload, DEFAULT_PATH_UPLOAD),
-                normalizePath(config.pathSelect, DEFAULT_PATH_SELECT),
-                normalizePath(config.pathSelected, DEFAULT_PATH_SELECTED),
-                ensureTrailingSlash(normalizePath(config.pathPublic, DEFAULT_PATH_PUBLIC)),
-                normalizePath(config.pathEvents, DEFAULT_PATH_EVENTS),
-                clampInt(config.timeoutMs, 1_000, 120_000, DEFAULT_TIMEOUT_MS),
-                clampLong(config.selectedCacheTtlMs, 250L, 60_000L, DEFAULT_SELECTED_CACHE_TTL_MS),
-                clampLong(config.pingCacheTtlMs, 1_000L, 120_000L, DEFAULT_PING_CACHE_TTL_MS),
-                config.allowInsecureHttp,
-                requestSigningKey,
-                normalizePin(tlsPinSha256),
+                DEFAULT_PATH_UPLOAD,
+                DEFAULT_PATH_SELECT,
+                DEFAULT_PATH_SELECTED,
+                DEFAULT_PATH_PUBLIC,
+                DEFAULT_PATH_EVENTS,
+                DEFAULT_TIMEOUT_MS,
+                DEFAULT_SELECTED_CACHE_TTL_MS,
+                DEFAULT_PING_CACHE_TTL_MS,
+                DEFAULT_ALLOW_INSECURE_HTTP,
+                DEFAULT_REQUEST_SIGNING_KEY,
+                normalizePin(DEFAULT_TLS_PIN_SHA256),
                 apiHostPort,
                 trustedAssetHostPorts,
-                clampInt(config.maxJsonBytes, 4 * 1024, 4 * 1024 * 1024, DEFAULT_MAX_JSON_BYTES),
-                clampInt(config.maxImageBytes, 64 * 1024, 32 * 1024 * 1024, DEFAULT_MAX_IMAGE_BYTES));
+                DEFAULT_MAX_JSON_BYTES,
+                DEFAULT_MAX_IMAGE_BYTES);
     }
 
     public static void setAuthToken(String token) {
@@ -230,7 +225,15 @@ public final class ServerApiClient {
     public static void uploadSkinAsync(File file, File mouthOpenFile, File mouthCloseFile, UUID playerUuid,
             boolean slim, ProgressListener callback) {
         ProgressListener listener = callback == null ? NO_OP_PROGRESS : callback;
+        CompletableFuture<String> tokenFuture = acquireSessionTokenAsync(playerUuid);
         CompletableFuture.runAsync(() -> {
+            String sessionToken;
+            try {
+                sessionToken = tokenFuture.get();
+            } catch (Exception ex) {
+                ModLog.warn("Session token acquisition failed before upload: {}", ex.getMessage());
+                sessionToken = null;
+            }
             RuntimeConfig cfg = runtimeConfig();
             if (file == null || !file.isFile()) {
                 ModLog.warn("Upload aborted: invalid file={}", file);
@@ -273,6 +276,9 @@ public final class ServerApiClient {
                         bodyHash,
                         requestId,
                         true);
+                if (sessionToken != null && !sessionToken.isBlank()) {
+                    connection.setRequestProperty(HEADER_SESSION, sessionToken);
+                }
 
                 boolean includeLegacyMouth = mouthOpenBytes != null;
                 long multipartOverhead = estimateMultipartOverhead(
@@ -342,6 +348,22 @@ public final class ServerApiClient {
                 int code = responseCode(connection, requestId);
                 String body = readBody(connection, code, cfg.maxJsonBytes);
                 ModLog.trace("Upload response: requestId={}, code={}, body={}", requestId, code, bodyPreview(body));
+                if (code == 426) {
+                    notifyClientOutdated();
+                    listener.onDone(false, "CLIENT_UPDATE_REQUIRED");
+                    return;
+                }
+                if (code == 401) {
+                    clearSessionToken(playerUuid);
+                    ModLog.warn("Upload 401: session token rejected for uuid={}", playerUuid);
+                    listener.onDone(false, httpErrorMessage(body, code));
+                    return;
+                }
+                if (code == 403) {
+                    ModLog.warn("Upload 403: session UUID mismatch for uuid={}", playerUuid);
+                    listener.onDone(false, httpErrorMessage(body, code));
+                    return;
+                }
                 if (code / 100 != 2) {
                     listener.onDone(false, httpErrorMessage(body, code));
                     ModLog.warn("Upload failed: requestId={}, code={}, message={}", requestId, code, bodyPreview(body));
@@ -375,7 +397,15 @@ public final class ServerApiClient {
             ModLog.trace("Select skin skipped: uuid or skin value missing");
             return;
         }
+        CompletableFuture<String> tokenFuture = acquireSessionTokenAsync(playerUuid);
         CompletableFuture.runAsync(() -> {
+            String sessionToken;
+            try {
+                sessionToken = tokenFuture.get();
+            } catch (Exception ex) {
+                ModLog.warn("Session token acquisition failed before select: {}", ex.getMessage());
+                sessionToken = null;
+            }
             HttpURLConnection connection = null;
             try {
                 RuntimeConfig cfg = runtimeConfig();
@@ -400,11 +430,27 @@ public final class ServerApiClient {
                         sha256Hex(bodyBytes),
                         requestId,
                         true);
+                if (sessionToken != null && !sessionToken.isBlank()) {
+                    connection.setRequestProperty(HEADER_SESSION, sessionToken);
+                }
                 try (OutputStream out = connection.getOutputStream()) {
                     out.write(bodyBytes);
                 }
                 int code = responseCode(connection, requestId);
                 String responseBody = readBody(connection, code, cfg.maxJsonBytes);
+                if (code == 426) {
+                    notifyClientOutdated();
+                    return;
+                }
+                if (code == 401) {
+                    clearSessionToken(playerUuid);
+                    ModLog.warn("Select 401: session token rejected for uuid={}", playerUuid);
+                    return;
+                }
+                if (code == 403) {
+                    ModLog.warn("Select 403: session UUID mismatch for uuid={}", playerUuid);
+                    return;
+                }
                 if (code / 100 != 2) {
                     ModLog.warn("Select skin failed: requestId={}, code={}, body={}", requestId, code,
                             bodyPreview(responseBody));
@@ -454,6 +500,10 @@ public final class ServerApiClient {
 
             int code = responseCode(connection, requestId);
             String responseBody = readBody(connection, code, cfg.maxJsonBytes);
+            if (code == 426) {
+                notifyClientOutdated();
+                return new ClearResult(false, false, mode, "CLIENT_UPDATE_REQUIRED");
+            }
             if (code / 100 != 2) {
                 String message = httpErrorMessage(responseBody, code);
                 ModLog.warn("Clear selection failed: uuid={}, mode={}, code={}, body={}",
@@ -525,6 +575,10 @@ public final class ServerApiClient {
                 connection = open("GET", requestPath, null, SHA256_EMPTY_HEX, requestId, true);
                 int code = responseCode(connection, requestId);
                 String body = readBody(connection, code, cfg.maxJsonBytes);
+                if (code == 426) {
+                    notifyClientOutdated();
+                    return null;
+                }
                 if (code / 100 != 2) {
                     ModLog.warn("Fetch selected failed: uuid={}, code={}, body={}", playerUuid, code,
                             bodyPreview(body));
@@ -589,6 +643,10 @@ public final class ServerApiClient {
                 ModLog.trace("Downloading texture from {}", urlOrPath);
                 connection = open("GET", urlOrPath, null, SHA256_EMPTY_HEX, requestId, false);
                 int code = responseCode(connection, requestId);
+                if (code == 426) {
+                    notifyClientOutdated();
+                    return null;
+                }
                 if (code / 100 != 2) {
                     ModLog.warn("Texture download failed: code={}, url={}", code, urlOrPath);
                     return null;
@@ -694,6 +752,11 @@ public final class ServerApiClient {
                     ModLog.debug("SSE connect attempt {} -> {}", attempt, cfg.pathEvents);
                     connection = openSse(cfg.pathEvents, requestId);
                     int code = responseCode(connection, requestId);
+                    if (code == 426) {
+                        notifyClientOutdated();
+                        sseStop = true;
+                        break;
+                    }
                     if (code / 100 != 2) {
                         String body = readBody(connection, code, cfg.maxJsonBytes);
                         ModLog.warn("SSE connect failed: code={}, body={}", code, bodyPreview(body));
@@ -807,6 +870,143 @@ public final class ServerApiClient {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Session token management (1.21.1 / Mojmap)
+    // -------------------------------------------------------------------------
+
+    public static CompletableFuture<String> acquireSessionTokenAsync(UUID playerUuid) {
+        if (playerUuid == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        CachedSessionToken cached = SESSION_TOKEN_CACHE.get(playerUuid);
+        if (cached != null && cached.isValid()) {
+            return CompletableFuture.completedFuture(cached.token());
+        }
+        CompletableFuture<String> inFlight = AUTH_IN_FLIGHT.get(playerUuid);
+        if (inFlight != null) {
+            return inFlight;
+        }
+        CompletableFuture<String> created = CompletableFuture.supplyAsync(() ->
+                joinServerAndAuth(playerUuid), EXECUTOR)
+                .whenComplete((ignored, throwable) -> AUTH_IN_FLIGHT.remove(playerUuid));
+        CompletableFuture<String> existing = AUTH_IN_FLIGHT.putIfAbsent(playerUuid, created);
+        return existing != null ? existing : created;
+    }
+
+    private static String joinServerAndAuth(UUID playerUuid) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) {
+            ModLog.warn("Auth skipped: Minecraft not available");
+            return null;
+        }
+        // Mojmap 1.21.1: mc.getUser() → User, getAccessToken(), getName()
+        var user = mc.getUser();
+        if (user == null || user.getAccessToken() == null || user.getAccessToken().isBlank()) {
+            ModLog.warn("Auth skipped: no valid Minecraft session for {}", playerUuid);
+            return null;
+        }
+        String username = user.getName();
+        String accessToken = user.getAccessToken();
+
+        byte[] serverIdBytes = new byte[20];
+        new SecureRandom().nextBytes(serverIdBytes);
+        StringBuilder sb = new StringBuilder(40);
+        for (byte b : serverIdBytes) {
+            sb.append(String.format("%02x", b));
+        }
+        String serverId = sb.toString();
+
+        // Mojmap 1.21.1: mc.getMinecraftSessionService()
+        try {
+            mc.getMinecraftSessionService().joinServer(playerUuid, accessToken, serverId);
+        } catch (AuthenticationException ex) {
+            ModLog.warn("Mojang joinServer failed for {}: {}", playerUuid, ex.getMessage());
+            return null;
+        }
+
+        RuntimeConfig cfg = runtimeConfig();
+        HttpURLConnection connection = null;
+        try {
+            String requestId = newRequestId();
+            String bodyJson = String.format(
+                    "{\"username\":\"%s\",\"uuid\":\"%s\",\"server_id\":\"%s\"}",
+                    escapeJson(username),
+                    playerUuid.toString(),
+                    serverId);
+            byte[] bodyBytes = bodyJson.getBytes(StandardCharsets.UTF_8);
+            connection = open(
+                    "POST",
+                    "/auth/session",
+                    "application/json; charset=utf-8",
+                    sha256Hex(bodyBytes),
+                    requestId,
+                    true);
+            try (OutputStream out = connection.getOutputStream()) {
+                out.write(bodyBytes);
+            }
+            int code = responseCode(connection, requestId);
+            String responseBody = readBody(connection, code, cfg.maxJsonBytes);
+            if (code == 426) {
+                notifyClientOutdated();
+                return null;
+            }
+            if (code / 100 != 2) {
+                ModLog.warn("Auth session failed: code={}, body={}", code, bodyPreview(responseBody));
+                return null;
+            }
+            String token = jsonString(responseBody, "session_token");
+            long expiresAt = jsonLong(responseBody, "expires_at", 0L);
+            if (token == null || token.isBlank()) {
+                ModLog.warn("Auth session response missing token");
+                return null;
+            }
+            long expiresAtMs = expiresAt > 0 ? expiresAt * 1000L : System.currentTimeMillis() + 1_800_000L;
+            SESSION_TOKEN_CACHE.put(playerUuid, new CachedSessionToken(token, expiresAtMs));
+            ModLog.info("event=auth.session.acquired uuid={}", playerUuid);
+            return token;
+        } catch (Exception ex) {
+            ModLog.error("Auth session request failed for uuid=" + playerUuid, ex);
+            return null;
+        } finally {
+            disconnectQuietly(connection);
+        }
+    }
+
+    public static void clearSessionToken(UUID playerUuid) {
+        if (playerUuid != null) {
+            SESSION_TOKEN_CACHE.remove(playerUuid);
+            ModLog.debug("Session token cleared for {}", playerUuid);
+        }
+    }
+
+    /**
+     * Call when the server returns 426 / CLIENT_UPDATE_REQUIRED.
+     * Shows an in-game error toast once and stops further API calls from
+     * cluttering logs. The flag is never reset — the player must restart the
+     * game after updating the mod.
+     */
+    public static void notifyClientOutdated() {
+        if (clientOutdated) {
+            return;
+        }
+        clientOutdated = true;
+        ModLog.error(
+                "Server rejected this client (426 CLIENT_UPDATE_REQUIRED). "
+                + "Protocol version {} is below the server minimum. Please update the CatSkinC mod.",
+                CLIENT_PROTOCOL_VERSION);
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (mc != null) {
+            mc.execute(() -> Toasts.error(
+                    net.minecraft.network.chat.Component.translatable("toast.catskinc.outdated.title"),
+                    net.minecraft.network.chat.Component.translatable("toast.catskinc.outdated.message")));
+        }
+    }
+
+    /** Returns true once the server has told us this client is outdated (426). */
+    public static boolean isClientOutdated() {
+        return clientOutdated;
+    }
+
     private static HttpURLConnection open(
             String method,
             String pathOrUrl,
@@ -827,6 +1027,7 @@ public final class ServerApiClient {
         connection.setRequestMethod(method);
         connection.setRequestProperty("User-Agent", "catskinc-remake/ServerApiClient");
         connection.setRequestProperty(HEADER_REQUEST_ID, requestId);
+        connection.setRequestProperty(HEADER_PROTOCOL, Integer.toString(CLIENT_PROTOCOL_VERSION));
         if (contentType != null) {
             connection.setRequestProperty("Content-Type", contentType);
         }
@@ -1117,38 +1318,6 @@ public final class ServerApiClient {
         };
     }
 
-    private static String normalizeBaseUrl(String value) {
-        String base = value == null ? "" : value.trim();
-        if (base.isEmpty()) {
-            base = DEFAULT_BASE_URL;
-        }
-        if (!base.startsWith("http://") && !base.startsWith("https://")) {
-            base = DEFAULT_BASE_URL;
-        }
-        while (base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        return base;
-    }
-
-    private static String normalizePath(String value, String fallback) {
-        String path = value == null ? "" : value.trim();
-        if (path.isEmpty()) {
-            path = fallback;
-        }
-        if (!path.startsWith("/")) {
-            path = "/" + path;
-        }
-        return path;
-    }
-
-    private static String ensureTrailingSlash(String value) {
-        if (value == null || value.isBlank()) {
-            return "/";
-        }
-        return value.endsWith("/") ? value : value + "/";
-    }
-
     private static String normalizePin(String value) {
         if (value == null || value.isBlank()) {
             return "";
@@ -1162,20 +1331,6 @@ public final class ServerApiClient {
             return compact.toLowerCase(Locale.ROOT);
         }
         return pin;
-    }
-
-    private static int clampInt(int value, int min, int max, int fallback) {
-        if (value <= 0) {
-            return fallback;
-        }
-        return Math.max(min, Math.min(max, value));
-    }
-
-    private static long clampLong(long value, long min, long max, long fallback) {
-        if (value <= 0L) {
-            return fallback;
-        }
-        return Math.max(min, Math.min(max, value));
     }
 
     private static URL parseUrl(String url) throws IOException {
@@ -1411,6 +1566,22 @@ public final class ServerApiClient {
             }
         }
         return defaultValue;
+    }
+
+    private static long jsonLong(String body, String key, long defaultValue) {
+        JsonObject object = parseJsonObject(body);
+        if (object == null || key == null || key.isBlank() || !object.has(key)) {
+            return defaultValue;
+        }
+        JsonElement element = object.get(key);
+        if (element == null || element.isJsonNull()) {
+            return defaultValue;
+        }
+        try {
+            return element.getAsLong();
+        } catch (Exception ignored) {
+            return defaultValue;
+        }
     }
 
     private static JsonObject parseJsonObject(String body) {

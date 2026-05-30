@@ -55,6 +55,9 @@
   "toast.update.available.title": "Mod update available",
   "toast.update.available.message": "CatSkinC %s is available",
 
+  "toast.catskinc.outdated.title": "Mod update required",
+  "toast.catskinc.outdated.message": "This CatSkinC version is no longer supported. Please update the mod.",
+
   "toast.error.not_png": "File must be a .png",
   "toast.error.drag_not_png": "Dragged file is not a .png",
   "toast.error.read_failed": "Failed to read file",

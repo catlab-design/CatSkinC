@@ -21,7 +21,6 @@ package com.sammy.catskincRemake.client;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.sammy.catskincRemake.client.ConfigManager;
 import com.sammy.catskincRemake.client.Identifiers;
 import com.sammy.catskincRemake.client.InventoryEntityRendererCompat;
 import com.sammy.catskincRemake.client.ModLog;
@@ -194,7 +193,7 @@ extends Screen {
         int n;
         int n2;
         int n3;
-        float f = ConfigManager.get().uiScale;
+        float f = 1.0F;
         int n4 = SkinUploadScreen.scaled(12, f);
         int n5 = SkinUploadScreen.scaled(10, f);
         n4 = Math.min(n4, Math.max(6, this.width / 24));
@@ -323,11 +322,11 @@ extends Screen {
         this.lastMouseX = n;
         this.lastMouseY = n2;
         this.drawBackdrop(drawContext);
-        float f2 = ConfigManager.get().uiScale;
+        float f2 = 1.0F;
         String string = this.ellipsis(this.title.getString(), this.width - 20);
         drawContext.drawCenteredString(this.font, (Component)Component.literal((String)string), this.width / 2, SkinUploadScreen.scaled(10, f2), -1);
         String string2 = this.ellipsis("Simple workspace for skin + mouth setup", this.width - 20);
-        drawContext.drawCenteredString(this.font, (Component)Component.literal((String)string2), this.width / 2, SkinUploadScreen.scaled(24, f2), -5855578);
+        drawContext.drawCenteredString(this.font, (Component)Component.literal((String)string2), this.width / 2, SkinUploadScreen.scaled(24, f2), -1);
         this.drawPanel(drawContext, this.leftX, this.leftY, this.leftW, this.leftH);
         this.drawPanel(drawContext, this.centerX, this.centerY, this.centerW, this.centerH);
         this.drawPanel(drawContext, this.rightX, this.rightY, this.rightW, this.rightH);
@@ -1006,6 +1005,15 @@ extends Screen {
                 boolean bl2 = false;
                 return bl2;
             }
+            // The server requires mouth assets to match the base skin dimensions
+            // exactly; reject here so the user gets a clear message before upload.
+            if (this.selectedWidth > 0 && this.selectedHeight > 0
+                    && (n2 != this.selectedWidth || n != this.selectedHeight)) {
+                if (bl) {
+                    SkinUploadScreen.toastError("toast.error.mouth_size_mismatch", new Object[0]);
+                }
+                return false;
+            }
             if (mouthVariant == MouthVariant.OPEN) {
                 this.selectedMouthOpenWidth = n2;
                 this.selectedMouthOpenHeight = n;
@@ -1549,6 +1557,17 @@ extends Screen {
         }
         if (!bl && (string4.contains("file required") || string4.contains("uuid and skin required"))) {
             return Component.translatable((String)"toast.error.upload_requires_skin").getString();
+        }
+        // Map session/identity rejections to actionable messages instead of raw
+        // server strings, so the player knows it is an account/auth issue.
+        if (string4.contains("session_token") || string4.contains("session token")) {
+            return "Could not verify your Minecraft session. Make sure you are signed in to an online-mode account, then try again.";
+        }
+        if (string4.contains("session_uuid_mismatch")) {
+            return "Session belongs to a different player. Please retry.";
+        }
+        if (string4.contains("offline uuid")) {
+            return "Only premium (online-mode) Minecraft accounts can upload skins.";
         }
         return string3;
     }
