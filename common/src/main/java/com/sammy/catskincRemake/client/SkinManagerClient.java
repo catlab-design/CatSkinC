@@ -178,24 +178,32 @@ public final class SkinManagerClient {
                 return;
             }
             client.execute(() -> {
-                try {
-                    if (images.skinImage == null) {
-                        ModLog.warn("Skin image download returned null for {}", uuid);
-                        closeQuietly(images.mouthOpenImage);
-                        closeQuietly(images.mouthCloseImage);
-                        return;
-                    }
+                if (images.skinImage == null) {
+                    ModLog.warn("Skin image download returned null for {}", uuid);
+                    // createOverlayImage was never called, so the mouth originals
+                    // are still owned here and must be released.
+                    closeQuietly(images.mouthOpenImage);
+                    closeQuietly(images.mouthCloseImage);
+                    return;
+                }
 
-                    NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
-                            "mouth-open");
-                    NativeImage idleImage = createOverlayImage(uuid, images.skinImage, images.mouthCloseImage,
-                            "mouth-close");
-                    if (images.mouthOpenRequested && talkingImage == null) {
-                        ModLog.warn("Mouth-open texture missing after download for {}", uuid);
-                    }
-                    if (images.mouthCloseRequested && idleImage == null) {
-                        ModLog.warn("Mouth-close texture missing after download for {}", uuid);
-                    }
+                // createOverlayImage consumes (closes) the mouth originals and
+                // returns newly-allocated merged images that we now own.
+                NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
+                        "mouth-open");
+                NativeImage idleImage = createOverlayImage(uuid, images.skinImage, images.mouthCloseImage,
+                        "mouth-close");
+                if (images.mouthOpenRequested && talkingImage == null) {
+                    ModLog.warn("Mouth-open texture missing after download for {}", uuid);
+                }
+                if (images.mouthCloseRequested && idleImage == null) {
+                    ModLog.warn("Mouth-close texture missing after download for {}", uuid);
+                }
+
+                boolean skinConsumed = false;
+                boolean idleConsumed = false;
+                boolean talkingConsumed = false;
+                try {
                     TextureManager textureManager = client.getTextureManager();
 
                     // Register new textures BEFORE destroying old ones to prevent
@@ -203,6 +211,7 @@ public final class SkinManagerClient {
                     Identifier baseId = idFor(uuid);
                     Identifier oldBaseId = BASE_CACHE.get(uuid);
                     NativeImageBackedTexture baseTexture = new NativeImageBackedTexture(images.skinImage);
+                    skinConsumed = true; // NativeImageBackedTexture now owns skinImage.
                     baseTexture.setFilter(false, false);
                     textureManager.registerTexture(baseId, baseTexture);
                     BASE_CACHE.put(uuid, baseId);
@@ -214,6 +223,7 @@ public final class SkinManagerClient {
                     Identifier oldIdleId = IDLE_CACHE.remove(uuid);
                     if (idleImage != null) {
                         NativeImageBackedTexture idleTexture = new NativeImageBackedTexture(idleImage);
+                        idleConsumed = true;
                         idleTexture.setFilter(false, false);
                         textureManager.registerTexture(idleId, idleTexture);
                         IDLE_CACHE.put(uuid, idleId);
@@ -226,6 +236,7 @@ public final class SkinManagerClient {
                     Identifier oldTalkingId = TALKING_CACHE.remove(uuid);
                     if (talkingImage != null) {
                         NativeImageBackedTexture talkingTexture = new NativeImageBackedTexture(talkingImage);
+                        talkingConsumed = true;
                         talkingTexture.setFilter(false, false);
                         textureManager.registerTexture(talkingId, talkingTexture);
                         TALKING_CACHE.put(uuid, talkingId);
@@ -238,9 +249,18 @@ public final class SkinManagerClient {
                             uuid, idleImage != null, talkingImage != null);
                 } catch (Exception exception) {
                     ModLog.error("Texture update failed for uuid=" + uuid, exception);
-                    closeQuietly(images.skinImage);
-                    closeQuietly(images.mouthOpenImage);
-                    closeQuietly(images.mouthCloseImage);
+                    // Release only images not yet handed to a texture, so we
+                    // neither leak nor double-free. The mouth originals were
+                    // already closed by createOverlayImage above.
+                    if (!skinConsumed) {
+                        closeQuietly(images.skinImage);
+                    }
+                    if (!idleConsumed) {
+                        closeQuietly(idleImage);
+                    }
+                    if (!talkingConsumed) {
+                        closeQuietly(talkingImage);
+                    }
                 }
             });
         }, EXECUTOR);

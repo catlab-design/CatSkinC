@@ -23,6 +23,13 @@ import java.util.concurrent.Executors;
 
 public final class ModrinthVersionChecker {
     private static final String DEFAULT_PATH_VERSION_CHECK = "/version/check";
+    private static final String DEFAULT_BASE_URL = "https://storage-api.catskin.space";
+    /// Modrinth API used to resolve the exact downloadable file for a version.
+    private static final String MODRINTH_API_BASE = "https://api.modrinth.com/v2";
+    private static final String MODRINTH_PROJECT_SLUG = "catskinc";
+    /// Modrinth mod page used as a fallback link when no direct file is resolved.
+    private static final String MODRINTH_PROJECT_PAGE = "https://modrinth.com/mod/catskinc";
+    private static final int DEFAULT_TIMEOUT_MS = 15_000;
     private static final String USER_AGENT = "catskinc-remake/VersionChecker";
     private static final int MAX_RESPONSE_BYTES = 256 * 1024;
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
@@ -65,6 +72,27 @@ public final class ModrinthVersionChecker {
             inFlight = future;
             return future;
         }
+    }
+
+    /// Once an update is detected, look up the exact Modrinth file for the new
+    /// version number, filtered by the loader + Minecraft version this client
+    /// runs on, and return the platform-matched download. Falls back to the
+    /// project page if no specific file matches.
+    public static CompletableFuture<DownloadInfo> resolveDownloadAsync(UpdateCheckResult result) {
+        if (result == null || !result.updateAvailable() || result.latestVersion().isBlank()) {
+            return CompletableFuture.completedFuture(DownloadInfo.projectPage());
+        }
+        String targetVersion = result.latestVersion();
+        String loader = currentLoader();
+        String gameVersion = blankToEmpty(Platform.getMinecraftVersion());
+        return CompletableFuture
+                .supplyAsync(() -> fetchDownload(targetVersion, loader, gameVersion), EXECUTOR)
+                .exceptionally(exception -> {
+                    Throwable cause = unwrap(exception);
+                    ModLog.debug("Modrinth download resolution failed: {}", cause.getMessage());
+                    ModLog.trace("Modrinth download resolution failed", cause);
+                    return DownloadInfo.projectPage();
+                });
     }
 
     public static synchronized boolean tryMarkNotified(UpdateCheckResult result) {
@@ -182,10 +210,8 @@ public final class ModrinthVersionChecker {
 
         HttpURLConnection connection = null;
         try {
-            ClientConfig config = ConfigManager.get();
-            config.sanitize();
-            String requestPath = buildRequestPath(currentVersion, gameVersion, loader, config.pathVersionCheck);
-            URL requestUrl = new URL(buildRequestUrl(config.apiBaseUrl, requestPath));
+            String requestPath = buildRequestPath(currentVersion, gameVersion, loader, DEFAULT_PATH_VERSION_CHECK);
+            URL requestUrl = new URL(buildRequestUrl(DEFAULT_BASE_URL, requestPath));
             connection = (HttpURLConnection) requestUrl.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(requestTimeoutMs());
@@ -214,6 +240,143 @@ public final class ModrinthVersionChecker {
                 connection.disconnect();
             }
         }
+    }
+
+    private static DownloadInfo fetchDownload(String targetVersion, String loader, String gameVersion) {
+        HttpURLConnection connection = null;
+        try {
+            // Query Modrinth for this project's versions filtered to our platform.
+            StringBuilder url = new StringBuilder(MODRINTH_API_BASE)
+                    .append("/project/")
+                    .append(URLEncoder.encode(MODRINTH_PROJECT_SLUG, StandardCharsets.UTF_8))
+                    .append("/version");
+            boolean hasQuery = false;
+            if (!loader.isBlank()) {
+                url.append(hasQuery ? '&' : '?')
+                        .append("loaders=")
+                        .append(URLEncoder.encode("[\"" + loader + "\"]", StandardCharsets.UTF_8));
+                hasQuery = true;
+            }
+            if (!gameVersion.isBlank()) {
+                url.append(hasQuery ? '&' : '?')
+                        .append("game_versions=")
+                        .append(URLEncoder.encode("[\"" + gameVersion + "\"]", StandardCharsets.UTF_8));
+            }
+
+            URL requestUrl = new URL(url.toString());
+            connection = (HttpURLConnection) requestUrl.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(requestTimeoutMs());
+            connection.setReadTimeout(requestTimeoutMs());
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("User-Agent", USER_AGENT);
+
+            int code = connection.getResponseCode();
+            String body = readBody(connection, code, MAX_RESPONSE_BYTES);
+            if (code < 200 || code >= 300) {
+                ModLog.debug("Modrinth version lookup returned HTTP {} for {}", code, requestUrl);
+                return DownloadInfo.projectPage();
+            }
+
+            DownloadInfo info = parseModrinthFiles(body, targetVersion, loader, gameVersion);
+            if (info.hasDirectFile()) {
+                ModLog.info("Resolved update download: version={}, file={}", targetVersion, info.fileName());
+            } else {
+                ModLog.debug("No direct Modrinth file matched version={} loader={} mc={}",
+                        targetVersion, loader, gameVersion);
+            }
+            return info;
+        } catch (IOException exception) {
+            throw new RuntimeException("Failed to resolve Modrinth download", exception);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    /// Pick the platform-matched download for {@code targetVersion} from a
+    /// Modrinth `/version` array response. Matches the version number, requires
+    /// the loader + game version to be present (when known), and prefers the
+    /// file flagged `primary`. Returns the project page when nothing matches.
+    static DownloadInfo parseModrinthFiles(String body, String targetVersion, String loader, String gameVersion) {
+        String target = blankToEmpty(targetVersion);
+        if (target.isBlank()) {
+            return DownloadInfo.projectPage();
+        }
+
+        JsonElement parsed;
+        try {
+            parsed = JsonParser.parseString(body);
+        } catch (Exception ignored) {
+            return DownloadInfo.projectPage();
+        }
+        if (!parsed.isJsonArray()) {
+            return DownloadInfo.projectPage();
+        }
+
+        for (JsonElement element : parsed.getAsJsonArray()) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject version = element.getAsJsonObject();
+            // Match the exact version number we were told to download.
+            if (compareVersions(getString(version, "version_number"), target) != 0) {
+                continue;
+            }
+            if (!loader.isBlank() && !jsonArrayContainsIgnoreCase(version, "loaders", loader)) {
+                continue;
+            }
+            if (!gameVersion.isBlank() && !jsonArrayContainsIgnoreCase(version, "game_versions", gameVersion)) {
+                continue;
+            }
+
+            JsonElement filesElement = version.get("files");
+            if (filesElement == null || !filesElement.isJsonArray()) {
+                continue;
+            }
+            String firstUrl = "";
+            String firstName = "";
+            for (JsonElement fileElement : filesElement.getAsJsonArray()) {
+                if (!fileElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject file = fileElement.getAsJsonObject();
+                String fileUrl = getString(file, "url");
+                String fileName = getString(file, "filename");
+                if (fileUrl.isBlank()) {
+                    continue;
+                }
+                if (firstUrl.isBlank()) {
+                    firstUrl = fileUrl;
+                    firstName = fileName;
+                }
+                if (getBoolean(file, "primary", false)) {
+                    return new DownloadInfo(fileUrl, fileName, MODRINTH_PROJECT_PAGE);
+                }
+            }
+            if (!firstUrl.isBlank()) {
+                return new DownloadInfo(firstUrl, firstName, MODRINTH_PROJECT_PAGE);
+            }
+        }
+        return DownloadInfo.projectPage();
+    }
+
+    private static boolean jsonArrayContainsIgnoreCase(JsonObject object, String key, String value) {
+        JsonElement element = object.get(key);
+        if (element == null || !element.isJsonArray()) {
+            return false;
+        }
+        for (JsonElement item : element.getAsJsonArray()) {
+            try {
+                if (value.equalsIgnoreCase(blankToEmpty(item.getAsString()))) {
+                    return true;
+                }
+            } catch (Exception ignored) {
+                // skip non-string entries
+            }
+        }
+        return false;
     }
 
     static String buildRequestPath(String currentVersion, String gameVersion, String loader) {
@@ -272,9 +435,7 @@ public final class ModrinthVersionChecker {
     }
 
     private static int requestTimeoutMs() {
-        ClientConfig config = ConfigManager.get();
-        config.sanitize();
-        return Math.max(1_000, Math.min(config.timeoutMs, 30_000));
+        return DEFAULT_TIMEOUT_MS;
     }
 
     private static int compareRemoteVersions(RemoteVersion left, RemoteVersion right) {
@@ -451,6 +612,24 @@ public final class ModrinthVersionChecker {
         private static UpdateCheckResult none(String currentVersion) {
             String normalized = blankToEmpty(currentVersion);
             return new UpdateCheckResult(normalized, normalized, "", false);
+        }
+    }
+
+    /// Resolved download for an available update. {@code downloadUrl}/{@code fileName}
+    /// are the platform-matched direct file (blank if none matched); {@code pageUrl}
+    /// is always a usable fallback link to the Modrinth project page.
+    public record DownloadInfo(String downloadUrl, String fileName, String pageUrl) {
+        private static DownloadInfo projectPage() {
+            return new DownloadInfo("", "", MODRINTH_PROJECT_PAGE);
+        }
+
+        public boolean hasDirectFile() {
+            return downloadUrl != null && !downloadUrl.isBlank();
+        }
+
+        /// Best available link: the direct file if resolved, else the project page.
+        public String bestUrl() {
+            return hasDirectFile() ? downloadUrl : pageUrl;
         }
     }
 

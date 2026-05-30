@@ -6,6 +6,27 @@ All notable changes to this project should be documented in this file.
 
 - No unreleased changes yet.
 
+## [3.0.0] - 2026-05-30
+
+### Added
+
+- Auto-update now resolves the exact download for your platform: when a newer
+  version is detected, it queries Modrinth for that version filtered by your
+  loader and Minecraft version and surfaces the matching file (falling back to
+  the project page when no direct file matches).
+
+### Changed
+
+- Upload errors caused by session/identity checks now show clear, actionable
+  messages (verify Minecraft session, premium-account-only) instead of raw
+  server text.
+
+### Fixed
+
+- Mouth PNGs that do not match the base skin size are now rejected up front with
+  a clear message, instead of failing later during upload.
+- Fixed a native-image leak and double-free on the skin texture apply error path.
+
 ## [2.0.0] - 2026-03-08
 
 ### Added

@@ -104,4 +104,69 @@ final class ModrinthVersionCheckerTest {
                 "/version/check?current=2.0.0&minecraft=1.20.1&loader=fabric",
                 ModrinthVersionChecker.buildRequestPath("2.0.0", "1.20.1", "fabric"));
     }
+
+    private static final String MODRINTH_VERSIONS = """
+            [
+              {
+                "version_number": "2.0.2",
+                "loaders": ["fabric"],
+                "game_versions": ["1.20.1"],
+                "files": [
+                  {"url": "https://cdn.modrinth.com/data/x/sources.jar", "filename": "catskinc-2.0.2-sources.jar", "primary": false},
+                  {"url": "https://cdn.modrinth.com/data/x/fabric.jar", "filename": "catskinc-fabric-2.0.2.jar", "primary": true}
+                ]
+              },
+              {
+                "version_number": "2.0.2",
+                "loaders": ["forge"],
+                "game_versions": ["1.20.1"],
+                "files": [
+                  {"url": "https://cdn.modrinth.com/data/x/forge.jar", "filename": "catskinc-forge-2.0.2.jar", "primary": true}
+                ]
+              }
+            ]
+            """;
+
+    @Test
+    void parseModrinthFilesPicksPrimaryFileForMatchingPlatform() {
+        ModrinthVersionChecker.DownloadInfo info =
+                ModrinthVersionChecker.parseModrinthFiles(MODRINTH_VERSIONS, "2.0.2", "fabric", "1.20.1");
+
+        assertTrue(info.hasDirectFile());
+        assertEquals("https://cdn.modrinth.com/data/x/fabric.jar", info.downloadUrl());
+        assertEquals("catskinc-fabric-2.0.2.jar", info.fileName());
+    }
+
+    @Test
+    void parseModrinthFilesMatchesByLoader() {
+        ModrinthVersionChecker.DownloadInfo info =
+                ModrinthVersionChecker.parseModrinthFiles(MODRINTH_VERSIONS, "2.0.2", "forge", "1.20.1");
+
+        assertEquals("catskinc-forge-2.0.2.jar", info.fileName());
+    }
+
+    @Test
+    void parseModrinthFilesFallsBackToProjectPageWhenNoPlatformMatch() {
+        ModrinthVersionChecker.DownloadInfo info =
+                ModrinthVersionChecker.parseModrinthFiles(MODRINTH_VERSIONS, "2.0.2", "neoforge", "1.20.1");
+
+        assertFalse(info.hasDirectFile());
+        assertEquals("https://modrinth.com/mod/catskinc", info.bestUrl());
+    }
+
+    @Test
+    void parseModrinthFilesFallsBackWhenGameVersionMismatch() {
+        ModrinthVersionChecker.DownloadInfo info =
+                ModrinthVersionChecker.parseModrinthFiles(MODRINTH_VERSIONS, "2.0.2", "fabric", "1.19.2");
+
+        assertFalse(info.hasDirectFile());
+    }
+
+    @Test
+    void parseModrinthFilesIgnoresNonMatchingVersionNumber() {
+        ModrinthVersionChecker.DownloadInfo info =
+                ModrinthVersionChecker.parseModrinthFiles(MODRINTH_VERSIONS, "9.9.9", "fabric", "1.20.1");
+
+        assertFalse(info.hasDirectFile());
+    }
 }

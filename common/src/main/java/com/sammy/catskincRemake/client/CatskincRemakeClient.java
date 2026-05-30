@@ -11,6 +11,13 @@ import net.minecraft.text.Text;
 import java.lang.management.ManagementFactory;
 
 public final class CatskincRemakeClient {
+    private static final int DEFAULT_OPEN_UI_KEY = 75;
+    private static final long DEFAULT_REFRESH_INTERVAL_MS = 15_000L;
+    private static final int DEFAULT_ENSURE_INTERVAL_TICKS = 20;
+    private static final int DEFAULT_ENSURE_LIMIT_PER_PASS = 16;
+    private static final int DEFAULT_VOICE_AMPLITUDE_THRESHOLD = 180;
+    private static final long DEFAULT_VOICE_HOLD_MS = 420L;
+
     private static KeyBinding openUiKey;
     private static int tickCounter;
     private static boolean initialized;
@@ -26,7 +33,6 @@ public final class CatskincRemakeClient {
         initialized = true;
         ModLog.info("Initializing CatSkinC-Remake client");
 
-        ConfigManager.load();
         applyConfig();
         VoiceStateNetworkClient.init();
         VoiceIntegrationBootstrap.init();
@@ -34,10 +40,10 @@ public final class CatskincRemakeClient {
         openUiKey = new KeyBinding(
                 "key.catskinc-remake.open_ui",
                 InputUtil.Type.KEYSYM,
-                ConfigManager.get().openUiKey,
+                DEFAULT_OPEN_UI_KEY,
                 "key.categories.catskinc-remake");
         KeyMappingRegistry.register(openUiKey);
-        ModLog.debug("Registered keybinding with keycode={}", ConfigManager.get().openUiKey);
+        ModLog.debug("Registered keybinding with keycode={}", DEFAULT_OPEN_UI_KEY);
 
         ClientTickEvent.CLIENT_POST.register(client -> {
             while (openUiKey.wasPressed()) {
@@ -55,9 +61,8 @@ public final class CatskincRemakeClient {
             VoiceActivityTracker.tick();
             VoiceIntegrationBootstrap.tick();
 
-            ClientConfig config = ConfigManager.get();
             tickCounter++;
-            if (config.ensureIntervalTicks <= 0 || (tickCounter % config.ensureIntervalTicks) != 0) {
+            if ((tickCounter % DEFAULT_ENSURE_INTERVAL_TICKS) != 0) {
                 return;
             }
 
@@ -68,7 +73,7 @@ public final class CatskincRemakeClient {
                 }
                 SkinManagerClient.ensureFetch(player.getUuid());
                 count++;
-                if (count >= config.ensureLimitPerPass) {
+                if (count >= DEFAULT_ENSURE_LIMIT_PER_PASS) {
                     break;
                 }
             }
@@ -98,6 +103,10 @@ public final class CatskincRemakeClient {
                     SkinManagerClient.clearAll();
                     SkinOverrideStore.clearAll();
                     ServerApiClient.stopSse();
+                    // Clear session token for local player on disconnect.
+                    if (player != null) {
+                        ServerApiClient.clearSessionToken(player.getUuid());
+                    }
                     VoiceIntegrationBootstrap.shutdown();
                 });
             }
@@ -113,26 +122,13 @@ public final class CatskincRemakeClient {
     }
 
     public static void applyConfig() {
-        ClientConfig config = ConfigManager.get();
         boolean devDiagnostics = isDevDiagnosticsDefaultOn();
-        boolean debugEnabled = config.debugLogging || devDiagnostics;
-        boolean traceEnabled = config.traceLogging || devDiagnostics;
-        ModLog.configure(debugEnabled, traceEnabled);
+        ModLog.configure(devDiagnostics, devDiagnostics);
         if (devDiagnostics) {
             ModLog.debug("Dev diagnostics enabled (debugger/flag detected)");
         }
-        ModLog.debug(
-                "Applying config: refreshIntervalMs={}, ensureIntervalTicks={}, ensureLimitPerPass={}, uiScale={}, voiceThreshold={}, voiceHoldMs={}",
-                config.refreshIntervalMs, config.ensureIntervalTicks, config.ensureLimitPerPass, config.uiScale,
-                config.voiceAmplitudeThreshold, config.voiceHoldMs);
-        SkinManagerClient.setRefreshIntervalMs(config.refreshIntervalMs);
-        VoiceActivityTracker.configure(config.voiceAmplitudeThreshold, config.voiceHoldMs);
-
-        if (openUiKey != null) {
-            openUiKey.setBoundKey(InputUtil.Type.KEYSYM.createFromCode(config.openUiKey));
-            KeyBinding.updateKeysByCode();
-            ModLog.trace("Updated keybinding to keycode={}", config.openUiKey);
-        }
+        SkinManagerClient.setRefreshIntervalMs(DEFAULT_REFRESH_INTERVAL_MS);
+        VoiceActivityTracker.configure(DEFAULT_VOICE_AMPLITUDE_THRESHOLD, DEFAULT_VOICE_HOLD_MS);
     }
 
     private static boolean isDevDiagnosticsDefaultOn() {
@@ -155,6 +151,20 @@ public final class CatskincRemakeClient {
         try {
             VoiceIntegrationBootstrap.init();
             ModLog.debug("Handling join flow: start SSE + initial sync");
+
+            // Pre-acquire session token for the local player so upload/select
+            // does not have to wait for the auth round-trip when the UI opens.
+            if (client.player != null) {
+                java.util.UUID localUuid = client.player.getUuid();
+                ServerApiClient.acquireSessionTokenAsync(localUuid).thenAccept(token -> {
+                    if (token == null) {
+                        ModLog.warn("Session token acquisition failed on join for {}", localUuid);
+                    } else {
+                        ModLog.debug("Session token pre-acquired on join for {}", localUuid);
+                    }
+                });
+            }
+
             ServerApiClient.startSse(event -> {
                 if (event == null || event.uuid == null) {
                     ModLog.trace("Skipping empty SSE event");
@@ -180,14 +190,24 @@ public final class CatskincRemakeClient {
                             ? "toast.cloud.connected"
                             : "toast.cloud.failed").getString())));
 
-            ModrinthVersionChecker.checkForUpdatesAsync().thenAccept(result -> client.execute(() -> {
+            ModrinthVersionChecker.checkForUpdatesAsync().thenAccept(result -> {
                 if (!ModrinthVersionChecker.tryMarkNotified(result)) {
                     return;
                 }
-                Toasts.info(
+                client.execute(() -> Toasts.info(
                         Text.translatable("toast.update.available.title"),
-                        Text.translatable("toast.update.available.message", result.latestVersion()));
-            }));
+                        Text.translatable("toast.update.available.message", result.latestVersion())));
+                // New version found → resolve the exact download for this platform.
+                ModrinthVersionChecker.resolveDownloadAsync(result).thenAccept(download -> client.execute(() -> {
+                    if (download.hasDirectFile()) {
+                        ModLog.info("Update {} download for this platform: {} ({})",
+                                result.latestVersion(), download.fileName(), download.downloadUrl());
+                    } else {
+                        ModLog.info("Update {} available on Modrinth: {}",
+                                result.latestVersion(), download.bestUrl());
+                    }
+                }));
+            });
         } catch (Exception exception) {
             ModLog.error("Join flow failed", exception);
         }
