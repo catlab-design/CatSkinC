@@ -115,8 +115,17 @@ public final class SkinManagerClient {
         CompletableFuture<ServerApiClient.SelectedSkin> selected = ServerApiClient.fetchSelectedAsync(uuid);
         selected.thenCompose(skin -> {
             if (skin == null || skin.url() == null || skin.url().isBlank()) {
-                ModLog.trace("No remote skin available for {}", uuid);
-                clearRemoteState(uuid);
+                // A blank result here is ambiguous: it can mean the player truly
+                // cleared their skin, OR a transient fetch failure / cache-TTL
+                // race / open circuit breaker. Destroying the live texture on
+                // every such poll makes the skin flicker between the remote skin
+                // and vanilla. Keep the rendered texture; only forget the URL
+                // tracking so a later poll re-applies. Real clears arrive via the
+                // SSE clear event (refresh()) or clearAll().
+                ModLog.trace("No remote skin available for {} (keeping current texture)", uuid);
+                LAST_SKIN_URL.remove(uuid);
+                LAST_MOUTH_OPEN_URL.remove(uuid);
+                LAST_MOUTH_CLOSE_URL.remove(uuid);
                 return CompletableFuture.completedFuture(null);
             }
 
@@ -179,6 +188,11 @@ public final class SkinManagerClient {
             client.execute(() -> {
                 if (images.skinImage == null) {
                     ModLog.warn("Skin image download returned null for {}", uuid);
+                    // Download failed (e.g. 404). Keep the currently rendered
+                    // texture as-is; do not touch BASE_CACHE. Roll back the
+                    // remembered URL so the next poll retries instead of
+                    // skipping as "unchanged".
+                    LAST_SKIN_URL.remove(uuid);
                     // createOverlayImage was never called, so the mouth originals
                     // are still owned here and must be released.
                     closeQuietly(images.mouthOpenImage);
@@ -355,24 +369,6 @@ public final class SkinManagerClient {
 
     private static String normalizeUrl(String value) {
         return value == null || value.isBlank() ? "" : value;
-    }
-
-    private static void clearRemoteState(UUID uuid) {
-        LAST_SKIN_URL.remove(uuid);
-        LAST_MOUTH_OPEN_URL.remove(uuid);
-        LAST_MOUTH_CLOSE_URL.remove(uuid);
-        // Only remove from the authoritative SLIM map, not PREFERRED_SLIM.
-        // PREFERRED_SLIM preserves the player's known arm model so that
-        // after clearing a skin the correct slim/wide arms are maintained.
-        SLIM.remove(uuid);
-        Minecraft client = Minecraft.getInstance();
-        if (client != null) {
-            client.execute(() -> destroyTextures(client, uuid));
-        } else {
-            BASE_CACHE.remove(uuid);
-            IDLE_CACHE.remove(uuid);
-            TALKING_CACHE.remove(uuid);
-        }
     }
 
     private static void destroyTextures(Minecraft client, UUID uuid) {

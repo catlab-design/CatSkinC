@@ -6,6 +6,17 @@ All notable changes to this project should be documented in this file.
 
 - No unreleased changes yet.
 
+## [3.0.2] - 2026-05-31
+
+### Fixed
+
+- Player skins no longer flicker or randomly swap between the remote skin,
+  vanilla, and Steve. A failed skin fetch (HTTP 404, a cache-TTL race, or an
+  open circuit breaker) used to destroy the live texture on every poll; the
+  currently rendered skin is now kept until a real update or clear arrives.
+- A failed texture download no longer marks the URL as "applied", so the next
+  poll retries instead of getting stuck on a half-applied state.
+
 ## [3.0.0] - 2026-05-30
 
 ### Added
