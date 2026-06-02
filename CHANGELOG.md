@@ -4,7 +4,20 @@ All notable changes to this project should be documented in this file.
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Fixed
+
+- Figura compatibility: CatSkinC now yields to an active Figura avatar instead of
+  fighting it. On 1.21.1 the texture, model (slim/wide), cape and elytra all flow
+  through a single `AbstractClientPlayer#getSkin()` call, which Figura also hooks.
+  CatSkinC used to rewrite that result unconditionally, so depending on mixin
+  order a player ended up with the CatSkinC texture but the wrong (wide) arm model
+  *and* with Figura body parts overwritten. CatSkinC now detects a loaded Figura
+  avatar (reflective, optional dependency) and performs no skin/model override for
+  that player.
+- Slim skins uploaded while Figura is installed now render with the correct slim
+  arms again. The symptom ("uploaded a slim skin but it stays wide") was caused by
+  the same `getSkin()` conflict above; when no Figura avatar is active the slim
+  model is applied as before.
 
 ## [3.0.2] - 2026-05-31
 
