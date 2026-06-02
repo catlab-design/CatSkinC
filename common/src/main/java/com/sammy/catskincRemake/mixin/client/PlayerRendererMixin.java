@@ -1,5 +1,6 @@
 package com.sammy.catskincRemake.mixin.client;
 
+import com.sammy.catskincRemake.client.FiguraCompat;
 import com.sammy.catskincRemake.client.SkinManagerClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
@@ -18,6 +19,9 @@ public abstract class PlayerRendererMixin {
             require = 0
     )
     private void catskincRemake$overrideTexture(AbstractClientPlayerEntity player, CallbackInfoReturnable<Identifier> cir) {
+        if (player != null && FiguraCompat.hasActiveAvatar(player.getUuid())) {
+            return;
+        }
         Identifier id = SkinManagerClient.getOrFetch(player);
         if (id != null) {
             cir.setReturnValue(id);

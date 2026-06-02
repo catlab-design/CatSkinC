@@ -4,7 +4,15 @@ All notable changes to this project should be documented in this file.
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+### Fixed
+
+- Figura compatibility: CatSkinC now yields to an active Figura avatar. When a
+  player has a loaded Figura avatar, CatSkinC performs no skin/model override for
+  that player so the two mods no longer compete over the same skin lookups.
+  Detection is reflective and Figura remains an optional dependency. (1.20.1
+  already overrides texture and model through separate methods and did not show
+  the 1.21.1 `getSkin()` conflict; this keeps behaviour consistent and
+  future-proof.)
 
 ## [3.0.2] - 2026-05-31
 

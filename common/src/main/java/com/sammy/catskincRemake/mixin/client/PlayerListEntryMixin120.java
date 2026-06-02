@@ -1,6 +1,7 @@
 package com.sammy.catskincRemake.mixin.client;
 
 import com.mojang.authlib.GameProfile;
+import com.sammy.catskincRemake.client.FiguraCompat;
 import com.sammy.catskincRemake.client.SkinManagerClient;
 import com.sammy.catskincRemake.client.SkinOverrideStore;
 import net.minecraft.client.network.PlayerListEntry;
@@ -23,6 +24,9 @@ public abstract class PlayerListEntryMixin120 {
     private void catskincRemake$overrideTexture(CallbackInfoReturnable<Identifier> cir) {
         UUID uuid = getUuid();
         if (uuid == null) {
+            return;
+        }
+        if (FiguraCompat.hasActiveAvatar(uuid)) {
             return;
         }
 
@@ -49,6 +53,9 @@ public abstract class PlayerListEntryMixin120 {
     private void catskincRemake$overrideModel(CallbackInfoReturnable<String> cir) {
         UUID uuid = getUuid();
         if (uuid == null) {
+            return;
+        }
+        if (FiguraCompat.hasActiveAvatar(uuid)) {
             return;
         }
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);

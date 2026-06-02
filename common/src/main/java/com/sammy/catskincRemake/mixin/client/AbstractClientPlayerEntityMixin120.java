@@ -1,5 +1,6 @@
 package com.sammy.catskincRemake.mixin.client;
 
+import com.sammy.catskincRemake.client.FiguraCompat;
 import com.sammy.catskincRemake.client.SkinManagerClient;
 import com.sammy.catskincRemake.client.SkinOverrideStore;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -22,6 +23,9 @@ public abstract class AbstractClientPlayerEntityMixin120 {
     private void catskincRemake$overrideTexture(CallbackInfoReturnable<Identifier> cir) {
         AbstractClientPlayerEntity self = (AbstractClientPlayerEntity) (Object) this;
         UUID uuid = self.getUuid();
+        if (FiguraCompat.hasActiveAvatar(uuid)) {
+            return;
+        }
 
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
         if (entry != null) {
@@ -43,6 +47,9 @@ public abstract class AbstractClientPlayerEntityMixin120 {
     )
     private void catskincRemake$overrideModel(CallbackInfoReturnable<String> cir) {
         UUID uuid = ((AbstractClientPlayerEntity) (Object) this).getUuid();
+        if (FiguraCompat.hasActiveAvatar(uuid)) {
+            return;
+        }
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
         if (entry != null) {
             cir.setReturnValue(entry.slim ? "slim" : "default");
