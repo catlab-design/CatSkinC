@@ -2,6 +2,19 @@
 
 All notable changes to this project should be documented in this file.
 
+## [3.0.4] - 2026-06-03
+
+### Fixed
+
+- Fixed a crash on launch on Fabric (`NoClassDefFoundError:
+  net.minecraft.server.level.ServerPlayer` during mod init). The 3.0.3 Fabric jar
+  was packaged without the Minecraft name → intermediary remap, so every Minecraft
+  reference used development (Mojmap) names that do not exist at runtime and the
+  mod failed to initialize. 3.0.4 is rebuilt with the remap correctly applied.
+  This is a packaging fix only — there are no gameplay or code changes versus
+  3.0.3, and the Figura compatibility fix from 3.0.3 is included. (NeoForge runs
+  with Mojang-mapped names at runtime and was not affected.)
+
 ## [3.0.3] - 2026-06-03
 
 ### Fixed
