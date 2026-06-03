@@ -2,6 +2,16 @@
 
 All notable changes to this project should be documented in this file.
 
+## [3.0.4] - 2026-06-03
+
+### Changed
+
+- Version bump to keep the 1.20.1 and 1.21.1 release lines in lockstep. There are
+  no functional changes in this tree: 1.20.1 (Fabric and Forge) was not affected
+  by the Fabric packaging issue fixed in the 1.21.1 tree's 3.0.4, because it
+  overrides texture and model through separate methods and its jars were remapped
+  correctly.
+
 ## [3.0.3] - 2026-06-03
 
 ### Fixed
