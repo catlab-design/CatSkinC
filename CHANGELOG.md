@@ -2,6 +2,22 @@
 
 All notable changes to this project should be documented in this file.
 
+## [3.0.5] - 2026-06-03
+
+### Changed
+
+- CatSkinC now takes precedence over Figura, matching the 1.21.1 release. When a
+  player has both a Figura avatar and a CatSkinC skin, the CatSkinC skin (and its
+  slim/wide model) is applied instead of yielding to Figura. The reflective
+  Figura-yield probe added in 3.0.3 has been removed from the texture/model
+  mixins.
+
+### Fixed
+
+- Uploaded skins no longer silently fail to apply when Figura is installed.
+  CatSkinC only overrides players who actually have a CatSkinC skin selected, so
+  players using only Figura (with no CatSkinC skin) are unaffected.
+
 ## [3.0.4] - 2026-06-03
 
 ### Changed

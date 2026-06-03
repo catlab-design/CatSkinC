@@ -1,7 +1,6 @@
 package com.sammy.catskincRemake.mixin.client;
 
 import com.mojang.authlib.GameProfile;
-import com.sammy.catskincRemake.client.FiguraCompat;
 import com.sammy.catskincRemake.client.SkinManagerClient;
 import com.sammy.catskincRemake.client.SkinOverrideStore;
 import net.minecraft.client.texture.PlayerSkinProvider;
@@ -24,9 +23,6 @@ public abstract class SkinManagerMixin {
     private void catskincRemake$overrideGuiSkin(GameProfile profile, CallbackInfoReturnable<Identifier> cir) {
         UUID uuid = profile == null ? null : profile.getId();
         if (uuid == null) {
-            return;
-        }
-        if (FiguraCompat.hasActiveAvatar(uuid)) {
             return;
         }
 
