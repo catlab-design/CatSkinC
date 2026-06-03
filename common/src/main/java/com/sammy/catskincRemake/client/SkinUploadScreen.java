@@ -815,7 +815,7 @@ extends Screen {
                     }
                     ModSounds.play(ModSounds.UI_COMPLETE);
                     if (minecraftClient.player != null) {
-                        SkinOverrideStore.clear(minecraftClient.player.getUuid());
+                        SkinUploadScreen.this.applyImmediateLocalSkinSelection(minecraftClient, bl);
                         ServerApiClient.selectSkin(minecraftClient.player.getUuid(), string, bl);
                         SkinManagerClient.setSlim(minecraftClient.player.getUuid(), bl);
                         SkinManagerClient.refresh(minecraftClient.player.getUuid());
@@ -1058,6 +1058,20 @@ extends Screen {
             return;
         }
         this.rebuildPreviewPlayer();
+    }
+
+    private void applyImmediateLocalSkinSelection(MinecraftClient minecraftClient, boolean slim) {
+        if (minecraftClient == null || minecraftClient.player == null || this.selectedFile == null) {
+            return;
+        }
+        UUID uuid = minecraftClient.player.getUuid();
+        SkinOverrideStore.clear(uuid);
+        try {
+            SkinOverrideStore.putManagedFromFile(uuid, this.selectedFile, slim);
+        }
+        catch (Exception exception) {
+            ModLog.warn("Failed to apply immediate local skin selection for {}", uuid, exception);
+        }
     }
 
     private void rebuildPreviewPlayer() {

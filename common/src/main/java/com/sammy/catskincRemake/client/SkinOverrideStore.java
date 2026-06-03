@@ -33,6 +33,11 @@ public final class SkinOverrideStore {
         return uuid == null ? null : ENTRIES.get(uuid);
     }
 
+    public static boolean isManaged(UUID uuid) {
+        Entry entry = get(uuid);
+        return entry != null && entry.managed;
+    }
+
     public static void put(UUID uuid, Identifier registeredTexture, boolean slim) {
         if (uuid == null || registeredTexture == null) {
             return;
@@ -89,4 +94,3 @@ public final class SkinOverrideStore {
         ENTRIES.clear();
     }
 }
-

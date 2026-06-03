@@ -259,6 +259,10 @@ public final class SkinManagerClient {
                         textureManager.destroyTexture(oldTalkingId);
                     }
 
+                    if (SkinOverrideStore.isManaged(uuid)) {
+                        SkinOverrideStore.clear(uuid);
+                    }
+
                     ModLog.trace("Texture applied for {} (idleVariant={}, talkingVariant={})",
                             uuid, idleImage != null, talkingImage != null);
                 } catch (Exception exception) {
