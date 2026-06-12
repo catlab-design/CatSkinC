@@ -1,0 +1,27 @@
+{
+  "ui.upload": {
+    "sounds": [
+      {
+        "name": "catskinc:ui/up_load",
+        "stream": false
+      }
+    ]
+  },
+  "ui.error": {
+    "sounds": [
+      {
+        "name": "catskinc:ui/error",
+        "stream": false
+      }
+    ]
+  },
+  "ui.complete": {
+    "sounds": [
+      {
+        "name": "catskinc:ui/complete",
+        "stream": false
+      }
+    ]
+  }
+}
+

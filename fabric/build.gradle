@@ -41,7 +41,7 @@ processResources {
     inputs.property 'java_version_range', ">=" + rootProject.ext.selectedJavaVersion
     inputs.property 'architectury_version_range', ">=" + rootProject.ext.selectedArchitecturyVersion
     inputs.property 'fabric_loader_version_range', ">=" + rootProject.ext.selectedFabricLoaderVersion
-    exclude 'assets/catskinc-remake/**'
+    exclude 'assets/catskinc/**'
 
     filesMatching('fabric.mod.json') {
         expand(

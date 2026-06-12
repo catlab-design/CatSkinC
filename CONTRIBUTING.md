@@ -1,4 +1,4 @@
-# Contributing to CatSkinC-Remake
+# Contributing to CatSkinC
 
 Thanks for contributing.
 
@@ -46,3 +46,4 @@ Suggested format:
 - `refactor: ...`
 - `docs: ...`
 - `chore: ...`
+

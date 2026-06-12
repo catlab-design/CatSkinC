@@ -4,7 +4,7 @@ plugins {
 
 loom {
     forge {
-        mixinConfig "catskinc-remake.mixins.json"
+        mixinConfig "catskinc.mixins.json"
     }
 }
 

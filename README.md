@@ -78,7 +78,7 @@ Forge client:
 
 Client config file is created at:
 
-- `<minecraft>/config/catskinc-remake.json`
+- `<minecraft>/config/CatSkinC.json`
 
 Important values:
 
@@ -128,3 +128,4 @@ See [SECURITY.md](SECURITY.md).
 ## License
 
 See [LICENSE](LICENSE).
+

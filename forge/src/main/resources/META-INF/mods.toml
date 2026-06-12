@@ -4,60 +4,61 @@ loaderVersion = "${forge_loader_range}"
 license = "GPL-3.0-or-later"
 
 [[mods]]
-modId = "catskinc_remake"
+modId = "catskinc"
 version = "${version}"
-displayName = "CatSkinC-Remake"
-authors = "Q Team Studio"
+displayName = "CatSkinC"
+authors = "Team CatLab Design"
 description = '''
 
 '''
 #logoFile = ""
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "forge"
 mandatory = true
 versionRange = "${forge_loader_range}"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "minecraft"
 mandatory = true
 versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "architectury"
 mandatory = true
 versionRange = "${architectury_version_range}"
 ordering = "AFTER"
 side = "BOTH"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "voicechat"
 mandatory = false
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "plasmovoice"
 mandatory = false
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "figura"
 mandatory = false
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "emotecraft"
 mandatory = false
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
+
