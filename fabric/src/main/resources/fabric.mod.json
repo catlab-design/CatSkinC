@@ -1,28 +1,28 @@
 {
   "schemaVersion": 1,
-  "id": "catskinc-remake",
+  "id": "catskinc",
   "version": "${version}",
-  "name": "CatSkinC-Remake",
+  "name": "CatSkinC",
   "description": "Cloud skin upload and live sync for CatSkinC.",
   "authors": [
-    "Q Team Studio"
+    "Team CatLab Design"
   ],
   "contact": {
     "homepage": "https://dotpp.xyz"
   },
   "license": "GPL-3.0-or-later",
-  "icon": "assets/catskinc-remake/icon.png",
+  "icon": "assets/catskinc/icon.png",
   "environment": "client",
   "entrypoints": {
     "main": [
-      "com.sammy.catskincRemake.fabric.CatskincRemakeFabric"
+      "com.sammy.catskinc.fabric.CatskincFabric"
     ],
     "client": [
-      "com.sammy.catskincRemake.fabric.client.CatskincRemakeFabricClient"
+      "com.sammy.catskinc.fabric.client.CatskincFabricClient"
     ]
   },
   "mixins": [
-    "catskinc-remake.mixins.json"
+    "catskinc.mixins.json"
   ],
   "depends": {
     "fabricloader": "${fabric_loader_version_range}",
@@ -38,3 +38,4 @@
     "emotecraft": "*"
   }
 }
+

@@ -7,7 +7,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'catskinc-remake'
+rootProject.name = 'catskinc'
 
 include 'common'
 include 'fabric'

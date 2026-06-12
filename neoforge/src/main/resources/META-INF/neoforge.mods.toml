@@ -4,58 +4,58 @@ loaderVersion = "${javafml_loader_range}"
 license = "GPL-3.0-or-later"
 
 [[mods]]
-modId = "catskinc_remake"
+modId = "catskinc"
 version = "${version}"
-displayName = "CatSkinC-Remake"
-authors = "Q Team Studio"
+displayName = "CatSkinC"
+authors = "Team CatLab Design"
 description = '''
 
 '''
 #logoFile = ""
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "neoforge"
 type = "required"
 versionRange = "${neoforge_loader_range}"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "minecraft"
 type = "required"
 versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "architectury"
 type = "required"
 versionRange = "${architectury_version_range}"
 ordering = "AFTER"
 side = "BOTH"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "voicechat"
 type = "optional"
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "plasmovoice"
 type = "optional"
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "figura"
 type = "optional"
 versionRange = "[0,)"
 ordering = "NONE"
 side = "CLIENT"
 
-[[dependencies.catskinc_remake]]
+[[dependencies.catskinc]]
 modId = "emotecraft"
 type = "optional"
 versionRange = "[0,)"
@@ -63,4 +63,5 @@ ordering = "NONE"
 side = "CLIENT"
 
 [[mixins]]
-config = "catskinc-remake.mixins.json"
+config = "catskinc.mixins.json"
+

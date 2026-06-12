@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "package": "com.sammy.catskinc.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "client": [
+    "PlayerRendererMixin",
+    "PlayerEntityAccessor",
+    "AbstractClientPlayerEntityMixin120",
+    "PlayerListEntryMixin120",
+    "SkinManagerMixin"
+  ],
+  "mixins": [
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
