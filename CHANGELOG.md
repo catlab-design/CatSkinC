@@ -2,6 +2,12 @@
 
 All notable changes to this project should be documented in this file.
 
+## [3.1.0] - 2026-06-12
+
+### Fixed
+
+- Fixed the "Clear Skin" action: obtained and attached the Mojang verification session token to clear selection requests to prevent HTTP 401 Unauthorized errors on session-enforced servers.
+
 ## [3.0.5] - 2026-06-03
 
 ### Changed

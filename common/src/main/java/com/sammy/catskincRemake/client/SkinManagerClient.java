@@ -17,7 +17,6 @@ import net.minecraft.resources.ResourceLocation;
 
 public final class SkinManagerClient {
     private static final Map<UUID, ResourceLocation> BASE_CACHE = new ConcurrentHashMap<>();
-    private static final Map<UUID, ResourceLocation> IDLE_CACHE = new ConcurrentHashMap<>();
     private static final Map<UUID, ResourceLocation> TALKING_CACHE = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> SLIM = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> PREFERRED_SLIM = new ConcurrentHashMap<>();
@@ -25,7 +24,6 @@ public final class SkinManagerClient {
     private static final Map<UUID, Long> LAST_CHECK = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
-    private static final Map<UUID, String> LAST_MOUTH_CLOSE_URL = new ConcurrentHashMap<>();
 
     private static volatile long refreshIntervalMs = 15_000L;
 
@@ -99,7 +97,6 @@ public final class SkinManagerClient {
         }
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
-        LAST_MOUTH_CLOSE_URL.remove(uuid);
         fetchAndApplyFor(uuid);
     }
 
@@ -115,56 +112,36 @@ public final class SkinManagerClient {
         CompletableFuture<ServerApiClient.SelectedSkin> selected = ServerApiClient.fetchSelectedAsync(uuid);
         selected.thenCompose(skin -> {
             if (skin == null || skin.url() == null || skin.url().isBlank()) {
-                // A blank result here is ambiguous: it can mean the player truly
-                // cleared their skin, OR a transient fetch failure / cache-TTL
-                // race / open circuit breaker. Destroying the live texture on
-                // every such poll makes the skin flicker between the remote skin
-                // and vanilla. Keep the rendered texture; only forget the URL
-                // tracking so a later poll re-applies. Real clears arrive via the
-                // SSE clear event (refresh()) or clearAll().
                 ModLog.trace("No remote skin available for {} (keeping current texture)", uuid);
                 LAST_SKIN_URL.remove(uuid);
                 LAST_MOUTH_OPEN_URL.remove(uuid);
-                LAST_MOUTH_CLOSE_URL.remove(uuid);
                 return CompletableFuture.completedFuture(null);
             }
 
             SLIM.put(uuid, skin.slim());
 
             String normalizedMouthOpen = normalizeUrl(skin.mouthOpenUrl());
-            String normalizedMouthClose = normalizeUrl(skin.mouthCloseUrl());
             String previousSkinUrl = LAST_SKIN_URL.get(uuid);
             String previousMouthOpenUrl = LAST_MOUTH_OPEN_URL.get(uuid);
-            String previousMouthCloseUrl = LAST_MOUTH_CLOSE_URL.get(uuid);
             if (Objects.equals(skin.url(), previousSkinUrl)
-                    && Objects.equals(normalizedMouthOpen, previousMouthOpenUrl)
-                    && Objects.equals(normalizedMouthClose, previousMouthCloseUrl)) {
+                    && Objects.equals(normalizedMouthOpen, previousMouthOpenUrl)) {
                 ModLog.trace("Skipping download for {} (URLs unchanged)", uuid);
                 return CompletableFuture.completedFuture(null);
             }
 
             LAST_SKIN_URL.put(uuid, skin.url());
             LAST_MOUTH_OPEN_URL.put(uuid, normalizedMouthOpen);
-            LAST_MOUTH_CLOSE_URL.put(uuid, normalizedMouthClose);
 
             CompletableFuture<NativeImage> skinFuture = ServerApiClient.downloadImageAsync(skin.url());
             CompletableFuture<NativeImage> mouthOpenFuture = normalizedMouthOpen.isEmpty()
                     ? CompletableFuture.completedFuture(null)
                     : ServerApiClient.downloadImageAsync(normalizedMouthOpen);
-            CompletableFuture<NativeImage> mouthCloseFuture = normalizedMouthClose.isEmpty()
-                    ? CompletableFuture.completedFuture(null)
-                    : ServerApiClient.downloadImageAsync(normalizedMouthClose);
             final boolean mouthOpenRequested = !normalizedMouthOpen.isEmpty();
-            final boolean mouthCloseRequested = !normalizedMouthClose.isEmpty();
             return skinFuture
-                    .thenCombine(mouthOpenFuture, PartialDownloadedImages::new)
-                    .thenCombine(mouthCloseFuture,
-                            (partial, mouthCloseImage) -> new DownloadedImages(
-                                    partial.skinImage(),
-                                    partial.mouthOpenImage(),
-                                    mouthCloseImage,
-                                    mouthOpenRequested,
-                                    mouthCloseRequested));
+                    .thenCombine(mouthOpenFuture, (skinImage, mouthOpenImage) -> new DownloadedImages(
+                            skinImage,
+                            mouthOpenImage,
+                            mouthOpenRequested));
         }).whenCompleteAsync((images, throwable) -> {
             IN_FLIGHT.remove(uuid);
             LAST_CHECK.put(uuid, System.currentTimeMillis());
@@ -182,67 +159,36 @@ public final class SkinManagerClient {
                 ModLog.trace("Client not ready; dropping texture update for {}", uuid);
                 closeQuietly(images.skinImage);
                 closeQuietly(images.mouthOpenImage);
-                closeQuietly(images.mouthCloseImage);
                 return;
             }
             client.execute(() -> {
                 if (images.skinImage == null) {
                     ModLog.warn("Skin image download returned null for {}", uuid);
-                    // Download failed (e.g. 404). Keep the currently rendered
-                    // texture as-is; do not touch BASE_CACHE. Roll back the
-                    // remembered URL so the next poll retries instead of
-                    // skipping as "unchanged".
                     LAST_SKIN_URL.remove(uuid);
-                    // createOverlayImage was never called, so the mouth originals
-                    // are still owned here and must be released.
                     closeQuietly(images.mouthOpenImage);
-                    closeQuietly(images.mouthCloseImage);
                     return;
                 }
 
-                // createOverlayImage consumes (closes) the mouth originals and
-                // returns newly-allocated merged images that we now own.
                 NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
                         "mouth-open");
-                NativeImage idleImage = createOverlayImage(uuid, images.skinImage, images.mouthCloseImage,
-                        "mouth-close");
                 if (images.mouthOpenRequested && talkingImage == null) {
                     ModLog.warn("Mouth-open texture missing after download for {}", uuid);
                 }
-                if (images.mouthCloseRequested && idleImage == null) {
-                    ModLog.warn("Mouth-close texture missing after download for {}", uuid);
-                }
 
                 boolean skinConsumed = false;
-                boolean idleConsumed = false;
                 boolean talkingConsumed = false;
                 try {
                     TextureManager textureManager = client.getTextureManager();
 
-                    // Register new textures BEFORE destroying old ones to prevent
-                    // race condition where render thread accesses a freed texture.
                     ResourceLocation baseId = idFor(uuid);
                     ResourceLocation oldBaseId = BASE_CACHE.get(uuid);
                     DynamicTexture baseTexture = new DynamicTexture(images.skinImage);
-                    skinConsumed = true; // DynamicTexture now owns skinImage.
+                    skinConsumed = true;
                     baseTexture.setFilter(false, false);
                     textureManager.register(baseId, baseTexture);
                     BASE_CACHE.put(uuid, baseId);
                     if (oldBaseId != null && !oldBaseId.equals(baseId)) {
                         textureManager.release(oldBaseId);
-                    }
-
-                    ResourceLocation idleId = idleIdFor(uuid);
-                    ResourceLocation oldIdleId = IDLE_CACHE.remove(uuid);
-                    if (idleImage != null) {
-                        DynamicTexture idleTexture = new DynamicTexture(idleImage);
-                        idleConsumed = true;
-                        idleTexture.setFilter(false, false);
-                        textureManager.register(idleId, idleTexture);
-                        IDLE_CACHE.put(uuid, idleId);
-                    }
-                    if (oldIdleId != null && !oldIdleId.equals(idleId)) {
-                        textureManager.release(oldIdleId);
                     }
 
                     ResourceLocation talkingId = talkingIdFor(uuid);
@@ -262,18 +208,11 @@ public final class SkinManagerClient {
                         SkinOverrideStore.clear(uuid);
                     }
 
-                    ModLog.trace("Texture applied for {} (idleVariant={}, talkingVariant={})",
-                            uuid, idleImage != null, talkingImage != null);
+                    ModLog.trace("Texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
                 } catch (Exception exception) {
                     ModLog.error("Texture update failed for uuid=" + uuid, exception);
-                    // Release only images not yet handed to a DynamicTexture, so
-                    // we neither leak nor double-free. The mouth originals were
-                    // already closed by createOverlayImage above.
                     if (!skinConsumed) {
                         closeQuietly(images.skinImage);
-                    }
-                    if (!idleConsumed) {
-                        closeQuietly(idleImage);
                     }
                     if (!talkingConsumed) {
                         closeQuietly(talkingImage);
@@ -310,22 +249,17 @@ public final class SkinManagerClient {
             for (ResourceLocation id : BASE_CACHE.values()) {
                 textureManager.release(id);
             }
-            for (ResourceLocation id : IDLE_CACHE.values()) {
-                textureManager.release(id);
-            }
             for (ResourceLocation id : TALKING_CACHE.values()) {
                 textureManager.release(id);
             }
         }
         BASE_CACHE.clear();
-        IDLE_CACHE.clear();
         TALKING_CACHE.clear();
         SLIM.clear();
         PREFERRED_SLIM.clear();
         LAST_CHECK.clear();
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
-        LAST_MOUTH_CLOSE_URL.clear();
         IN_FLIGHT.clear();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
@@ -338,10 +272,6 @@ public final class SkinManagerClient {
         return Identifiers.mod("remote/" + uuid.toString().replace("-", "") + "/talking");
     }
 
-    private static ResourceLocation idleIdFor(UUID uuid) {
-        return Identifiers.mod("remote/" + uuid.toString().replace("-", "") + "/idle");
-    }
-
     private static ResourceLocation resolveRenderTexture(UUID uuid) {
         ResourceLocation base = BASE_CACHE.get(uuid);
         if (base == null) {
@@ -352,11 +282,6 @@ public final class SkinManagerClient {
             if (talking != null) {
                 return talking;
             }
-            return base;
-        }
-        ResourceLocation idle = IDLE_CACHE.get(uuid);
-        if (idle != null) {
-            return idle;
         }
         return base;
     }
@@ -376,10 +301,6 @@ public final class SkinManagerClient {
         ResourceLocation base = BASE_CACHE.remove(uuid);
         if (base != null) {
             textureManager.release(base);
-        }
-        ResourceLocation idle = IDLE_CACHE.remove(uuid);
-        if (idle != null) {
-            textureManager.release(idle);
         }
         ResourceLocation talking = TALKING_CACHE.remove(uuid);
         if (talking != null) {
@@ -448,26 +369,19 @@ public final class SkinManagerClient {
      */
     static void resetForTesting() {
         BASE_CACHE.clear();
-        IDLE_CACHE.clear();
         TALKING_CACHE.clear();
         SLIM.clear();
         PREFERRED_SLIM.clear();
         LAST_CHECK.clear();
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
-        LAST_MOUTH_CLOSE_URL.clear();
         IN_FLIGHT.clear();
         refreshIntervalMs = 15_000L;
-    }
-
-    private record PartialDownloadedImages(NativeImage skinImage, NativeImage mouthOpenImage) {
     }
 
     private record DownloadedImages(
             NativeImage skinImage,
             NativeImage mouthOpenImage,
-            NativeImage mouthCloseImage,
-            boolean mouthOpenRequested,
-            boolean mouthCloseRequested) {
+            boolean mouthOpenRequested) {
     }
 }

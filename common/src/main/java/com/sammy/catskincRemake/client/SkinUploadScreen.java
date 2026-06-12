@@ -101,9 +101,6 @@ extends Screen {
     private File selectedMouthOpenFile;
     private int selectedMouthOpenWidth;
     private int selectedMouthOpenHeight;
-    private File selectedMouthCloseFile;
-    private int selectedMouthCloseWidth;
-    private int selectedMouthCloseHeight;
     private boolean slimChecked;
     private boolean slimInitialized;
     private ResourceLocation previewId;
@@ -144,10 +141,6 @@ extends Screen {
     private int btnMouthOpenY;
     private int btnMouthOpenW;
     private int btnMouthOpenH;
-    private int btnMouthCloseX;
-    private int btnMouthCloseY;
-    private int btnMouthCloseW;
-    private int btnMouthCloseH;
     private int btnSlimX;
     private int btnSlimY;
     private int btnSlimW;
@@ -198,7 +191,7 @@ extends Screen {
         int n5 = SkinUploadScreen.scaled(10, f);
         n4 = Math.min(n4, Math.max(6, this.width / 24));
         n5 = Math.min(n5, Math.max(6, this.width / 36));
-        int n6 = SkinUploadScreen.scaled(36, f);
+        int n6 = SkinUploadScreen.scaled(48, f);
         int n7 = SkinUploadScreen.scaled(12, f);
         int n8 = n4 + n6 + SkinUploadScreen.scaled(4, f);
         int n9 = this.height - n8 - n4;
@@ -271,7 +264,7 @@ extends Screen {
         int n24 = this.rightY + SkinUploadScreen.scaled(38, f);
         int n25 = SkinUploadScreen.scaled(8, f);
         int n26 = this.rightY + this.rightH - n25 - n24;
-        int n27 = n21 * 6 + n22 * 3 + n23 * 2;
+        int n27 = n21 * 5 + n22 * 2 + n23 * 2;
         if (n26 > 0 && n27 > n26) {
             float f2 = (float)n26 / (float)n27;
             n21 = Math.max(16, Math.round((float)n21 * f2));
@@ -286,12 +279,8 @@ extends Screen {
         this.btnMouthOpenY = this.btnBrowseY + n21 + n22;
         this.btnMouthOpenW = n20;
         this.btnMouthOpenH = n21;
-        this.btnMouthCloseX = this.rightX + n;
-        this.btnMouthCloseY = this.btnMouthOpenY + n21 + n22;
-        this.btnMouthCloseW = n20;
-        this.btnMouthCloseH = n21;
         this.btnSlimX = this.rightX + n;
-        this.btnSlimY = this.btnMouthCloseY + n21 + n23;
+        this.btnSlimY = this.btnMouthOpenY + n21 + n23;
         this.btnSlimW = n20;
         this.btnSlimH = n21;
         this.btnUploadX = this.rightX + n;
@@ -323,10 +312,35 @@ extends Screen {
         this.lastMouseY = n2;
         this.drawBackdrop(drawContext);
         float f2 = 1.0F;
-        String string = this.ellipsis(this.title.getString(), this.width - 20);
-        drawContext.drawCenteredString(this.font, (Component)Component.literal((String)string), this.width / 2, SkinUploadScreen.scaled(10, f2), -1);
-        String string2 = this.ellipsis("Simple workspace for skin + mouth setup", this.width - 20);
-        drawContext.drawCenteredString(this.font, (Component)Component.literal((String)string2), this.width / 2, SkinUploadScreen.scaled(24, f2), -1);
+        this.renderTabs(drawContext, n, n2, true);
+        int titleY = 10;
+        int subtitleY = 20;
+        if (this.leftY < 40) {
+            subtitleY = -999;
+            titleY = 8;
+        }
+
+        float titleScale = 0.8f;
+        int maxTitleW = Math.round((float)Math.max(100, (this.width / 2 - 85) - this.leftX - 10) / titleScale);
+        String string = this.ellipsis(this.title.getString(), maxTitleW);
+        drawContext.pose().pushPose();
+        drawContext.pose().scale(titleScale, titleScale, 1.0f);
+        int scaledTitleX = Math.round((float)this.leftX / titleScale);
+        int scaledTitleY = Math.round((float)titleY / titleScale);
+        drawContext.drawString(this.font, (Component)Component.literal((String)string), scaledTitleX, scaledTitleY, -1);
+        drawContext.pose().popPose();
+
+        if (subtitleY != -999) {
+            float descScale = 0.7f;
+            int maxDescW = Math.round((float)Math.max(100, (this.width / 2 - 85) - this.leftX - 10) / descScale);
+            String string2 = this.ellipsis("Skin & mouth setup", maxDescW);
+            drawContext.pose().pushPose();
+            drawContext.pose().scale(descScale, descScale, 1.0f);
+            int scaledDescX = Math.round((float)this.leftX / descScale);
+            int scaledDescY = Math.round((float)subtitleY / descScale);
+            drawContext.drawString(this.font, (Component)Component.literal((String)string2), scaledDescX, scaledDescY, -1);
+            drawContext.pose().popPose();
+        }
         this.drawPanel(drawContext, this.leftX, this.leftY, this.leftW, this.leftH);
         this.drawPanel(drawContext, this.centerX, this.centerY, this.centerW, this.centerH);
         this.drawPanel(drawContext, this.rightX, this.rightY, this.rightW, this.rightH);
@@ -360,10 +374,7 @@ extends Screen {
         }
         this.setSelectedFile((File)arrayList.get(0), false);
         if (this.selectedFile != null && arrayList.size() > 1) {
-            this.setSelectedMouthFile((File)arrayList.get(1), MouthVariant.OPEN);
-        }
-        if (this.selectedFile != null && arrayList.size() > 2) {
-            this.setSelectedMouthFile((File)arrayList.get(2), MouthVariant.CLOSE);
+            this.setSelectedMouthFile((File)arrayList.get(1));
         }
     }
 
@@ -388,6 +399,12 @@ extends Screen {
             if (this.clearDialogOpen) {
                 return this.handleClearDialogClick(n2, n3);
             }
+            int centerX = this.width / 2;
+            if (this.isInside(n2, n3, centerX + 5, 6, 80, 18)) {
+                ModSounds.playClick();
+                net.minecraft.client.Minecraft.getInstance().setScreen(new SettingsScreen());
+                return true;
+            }
             if (this.isInside(n2, n3, this.dropX, this.dropY, this.dropW, this.dropH)) {
                 this.browseForSkinFile();
                 return true;
@@ -399,15 +416,11 @@ extends Screen {
             }
             if (this.isInside(n2, n3, this.btnMouthOpenX, this.btnMouthOpenY, this.btnMouthOpenW, this.btnMouthOpenH)) {
                 ModSounds.play(ModSounds.UI_UPLOAD);
-                this.browseForMouthFile(MouthVariant.OPEN);
-                return true;
-            }
-            if (this.isInside(n2, n3, this.btnMouthCloseX, this.btnMouthCloseY, this.btnMouthCloseW, this.btnMouthCloseH)) {
-                ModSounds.play(ModSounds.UI_UPLOAD);
-                this.browseForMouthFile(MouthVariant.CLOSE);
+                this.browseForMouthFile();
                 return true;
             }
             if (this.isInside(n2, n3, this.btnSlimX, this.btnSlimY, this.btnSlimW, this.btnSlimH)) {
+                ModSounds.playClick();
                 this.slimChecked = !this.slimChecked;
                 this.rebuildPreviewPlayer();
                 return true;
@@ -480,11 +493,9 @@ extends Screen {
             String string = this.ellipsis(this.selectedFile.getName(), this.infoW - 24);
             String string2 = this.selectedWidth + "x" + this.selectedHeight + (this.slimChecked ? " | Slim" : " | Classic");
             String string3 = this.selectedMouthOpenFile != null ? "Open: " + this.ellipsis(this.selectedMouthOpenFile.getName(), this.infoW - 64) : Component.translatable((String)"screen.catskinc-remake.info.mouth_open_none").getString();
-            String string4 = this.selectedMouthCloseFile != null ? "Close: " + this.ellipsis(this.selectedMouthCloseFile.getName(), this.infoW - 64) : Component.translatable((String)"screen.catskinc-remake.info.mouth_close_none").getString();
-            drawContext.drawString(this.font, (Component)Component.literal((String)string), this.infoX + 10, this.infoY + 6, -1);
-            drawContext.drawString(this.font, (Component)Component.literal((String)string2), this.infoX + 10, this.infoY + 20, -1381654);
-            drawContext.drawString(this.font, (Component)Component.literal((String)string3), this.infoX + 10, this.infoY + 36, -3552823);
-            drawContext.drawString(this.font, (Component)Component.literal((String)string4), this.infoX + 10, this.infoY + 50, -3552823);
+            drawContext.drawString(this.font, (Component)Component.literal((String)string), this.infoX + 10, this.infoY + 8, -1);
+            drawContext.drawString(this.font, (Component)Component.literal((String)string2), this.infoX + 10, this.infoY + 24, -1381654);
+            drawContext.drawString(this.font, (Component)Component.literal((String)string3), this.infoX + 10, this.infoY + 42, -3552823);
         }
     }
 
@@ -496,7 +507,6 @@ extends Screen {
         this.drawSectionHeader(drawContext, "Actions", n3, this.btnUploadY - 12, n4);
         this.drawCustomButton(drawContext, this.btnBrowseX, this.btnBrowseY, this.btnBrowseW, this.btnBrowseH, Component.translatable((String)"screen.catskinc-remake.button.browse_skin").getString(), n, n2, true, ButtonStyle.PRIMARY);
         this.drawCustomButton(drawContext, this.btnMouthOpenX, this.btnMouthOpenY, this.btnMouthOpenW, this.btnMouthOpenH, Component.translatable((String)"screen.catskinc-remake.button.browse_mouth_open").getString(), n, n2, this.selectedFile != null, ButtonStyle.PRIMARY);
-        this.drawCustomButton(drawContext, this.btnMouthCloseX, this.btnMouthCloseY, this.btnMouthCloseW, this.btnMouthCloseH, Component.translatable((String)"screen.catskinc-remake.button.browse_mouth_close").getString(), n, n2, this.selectedFile != null, ButtonStyle.PRIMARY);
         this.drawSlimToggle(drawContext, this.btnSlimX, this.btnSlimY, this.btnSlimW, this.btnSlimH, n, n2);
         boolean bl = this.selectedFile != null;
         this.drawCustomButton(drawContext, this.btnUploadX, this.btnUploadY, this.btnUploadW, this.btnUploadH, Component.translatable((String)"screen.catskinc-remake.button.upload").getString(), n, n2, bl, ButtonStyle.PRIMARY);
@@ -697,9 +707,7 @@ extends Screen {
             } else if (historyEntry.thumbId != null) {
                 drawContext.blit(historyEntry.thumbId, n16, n17, 0.0f, 0.0f, n15, n15, n15, n15);
             }
-            if (historyEntry.previewSkinId != null || historyEntry.thumbId != null) {
-                SkinUploadScreen.drawRectBorder(drawContext, n16 - 1, n17 - 1, n15 + 2, n15 + 2, 0x36666666);
-            }
+
             n7 = 12;
             n9 = n11 + n12 - n7 - 6;
             n8 = n10 + (n13 - n7) / 2;
@@ -795,23 +803,33 @@ extends Screen {
         ModSounds.play(ModSounds.UI_UPLOAD);
         minecraftClient.setScreen(null);
         UUID uUID = minecraftClient.player == null ? null : minecraftClient.player.getUUID();
-        ServerApiClient.uploadSkinAsync(this.selectedFile, this.selectedMouthOpenFile, this.selectedMouthCloseFile, uUID, bl, new ServerApiClient.ProgressListener(){
+        ServerApiClient.uploadSkinAsync(this.selectedFile, this.selectedMouthOpenFile, uUID, bl, new ServerApiClient.ProgressListener(){
 
             @Override
             public void onStart(long l) {
-                minecraftClient.execute(() -> uploadToast.update(0.0f, Component.translatable((String)"toast.upload.start", (Object[])new Object[]{SkinUploadScreen.humanBytes(l)}).getString()));
+                minecraftClient.execute(() -> {
+                    if (uploadToast != null) {
+                        uploadToast.update(0.0f, Component.translatable((String)"toast.upload.start", (Object[])new Object[]{SkinUploadScreen.humanBytes(l)}).getString());
+                    }
+                });
             }
 
             @Override
             public void onProgress(long l, long l2) {
                 float f = l2 > 0L ? (float)l / (float)l2 : 0.0f;
-                minecraftClient.execute(() -> uploadToast.update(f, (int)(f * 100.0f) + "%"));
+                minecraftClient.execute(() -> {
+                    if (uploadToast != null) {
+                        uploadToast.update(f, (int)(f * 100.0f) + "%");
+                    }
+                });
             }
 
             @Override
             public void onDone(boolean bl2, String string) {
                 minecraftClient.execute(() -> {
-                    uploadToast.complete(bl2, Component.translatable((String)(bl2 ? "toast.upload.success" : "toast.upload.failed")).getString());
+                    if (uploadToast != null) {
+                        uploadToast.complete(bl2, Component.translatable((String)(bl2 ? "toast.upload.success" : "toast.upload.failed")).getString());
+                    }
                     if (!bl2) {
                         ModSounds.play(ModSounds.UI_ERROR);
                         String string2 = SkinUploadScreen.formatServerErrorMessage(string, false);
@@ -846,22 +864,22 @@ extends Screen {
         }
     }
 
-    private void browseForMouthFile(MouthVariant mouthVariant) {
+    private void browseForMouthFile() {
         if (this.selectedFile == null) {
             SkinUploadScreen.toastError("toast.error.mouth_requires_skin", new Object[0]);
             ModSounds.play(ModSounds.UI_ERROR);
             return;
         }
         try {
-            File file = mouthVariant == MouthVariant.OPEN ? this.selectedMouthOpenFile : this.selectedMouthCloseFile;
+            File file = this.selectedMouthOpenFile;
             String string = file != null ? file.getAbsolutePath() : this.selectedFile.getAbsolutePath();
-            String string2 = mouthVariant == MouthVariant.OPEN ? "Select mouth-open PNG" : "Select mouth-close PNG";
+            String string2 = "Select mouth-open PNG";
             String string3 = TinyFileDialogs.tinyfd_openFileDialog((CharSequence)string2, (CharSequence)string, null, (CharSequence)"PNG image", (boolean)false);
             if (string3 == null || string3.isBlank()) {
-                ModLog.trace("Mouth file dialog cancelled for {}", new Object[]{mouthVariant});
+                ModLog.trace("Mouth file dialog cancelled", new Object[0]);
                 return;
             }
-            this.setSelectedMouthFile(new File(string3), mouthVariant);
+            this.setSelectedMouthFile(new File(string3));
         }
         catch (Exception exception) {
             ModLog.error("Mouth file picker failed", exception);
@@ -959,7 +977,7 @@ extends Screen {
         }
     }
 
-    private void setSelectedMouthFile(File file, MouthVariant mouthVariant) {
+    private void setSelectedMouthFile(File file) {
         if (file == null) {
             return;
         }
@@ -974,17 +992,13 @@ extends Screen {
             ModSounds.play(ModSounds.UI_ERROR);
             return;
         }
-        if (!this.validateMouthFile(file, mouthVariant, true)) {
+        if (!this.validateMouthFile(file, true)) {
             ModSounds.play(ModSounds.UI_ERROR);
             return;
         }
-        if (mouthVariant == MouthVariant.OPEN) {
-            this.selectedMouthOpenFile = file;
-        } else {
-            this.selectedMouthCloseFile = file;
-        }
+        this.selectedMouthOpenFile = file;
         this.refreshPreviewTexture();
-        SkinUploadScreen.toastInfo(mouthVariant == MouthVariant.OPEN ? "toast.file.mouth_open_selected" : "toast.file.mouth_close_selected", file.getName());
+        SkinUploadScreen.toastInfo("toast.file.mouth_open_selected", file.getName());
     }
 
     /*
@@ -992,7 +1006,7 @@ extends Screen {
      * Enabled unnecessary exception pruning
      * Enabled aggressive exception aggregation
      */
-    private boolean validateMouthFile(File file, MouthVariant mouthVariant, boolean bl) {
+    private boolean validateMouthFile(File file, boolean bl) {
         try (FileInputStream fileInputStream = new FileInputStream(file);){
             NativeImage nativeImage = NativeImage.read((InputStream)fileInputStream);
             int n2 = nativeImage.getWidth();
@@ -1014,13 +1028,8 @@ extends Screen {
                 }
                 return false;
             }
-            if (mouthVariant == MouthVariant.OPEN) {
-                this.selectedMouthOpenWidth = n2;
-                this.selectedMouthOpenHeight = n;
-            } else {
-                this.selectedMouthCloseWidth = n2;
-                this.selectedMouthCloseHeight = n;
-            }
+            this.selectedMouthOpenWidth = n2;
+            this.selectedMouthOpenHeight = n;
             boolean bl3 = true;
             return bl3;
         }
@@ -1039,7 +1048,7 @@ extends Screen {
         }
         try (FileInputStream fileInputStream = new FileInputStream(this.selectedFile);){
             NativeImage nativeImage = NativeImage.read((InputStream)fileInputStream);
-            File file = this.selectedMouthCloseFile != null ? this.selectedMouthCloseFile : this.selectedMouthOpenFile;
+            File file = this.selectedMouthOpenFile;
             NativeImage nativeImage2 = nativeImage;
             if (file != null) {
                 try (FileInputStream fileInputStream2 = new FileInputStream(file);){
@@ -1247,9 +1256,6 @@ extends Screen {
             this.selectedMouthOpenFile = null;
             this.selectedMouthOpenWidth = 0;
             this.selectedMouthOpenHeight = 0;
-            this.selectedMouthCloseFile = null;
-            this.selectedMouthCloseWidth = 0;
-            this.selectedMouthCloseHeight = 0;
             this.disposePreview();
         }
         this.historyScroll = SkinUploadScreen.clamp(this.historyScroll, 0, this.maxHistoryScroll());
@@ -1272,6 +1278,8 @@ extends Screen {
         Minecraft minecraftClient = Minecraft.getInstance();
         if (minecraftClient != null && minecraftClient.player != null && (bl = SkinManagerClient.isSlimOrNull(minecraftClient.player.getUUID())) != null) {
             this.slimChecked = bl;
+        } else {
+            this.slimChecked = false;
         }
         this.slimInitialized = true;
     }
@@ -1382,9 +1390,6 @@ extends Screen {
         this.selectedMouthOpenFile = null;
         this.selectedMouthOpenWidth = 0;
         this.selectedMouthOpenHeight = 0;
-        this.selectedMouthCloseFile = null;
-        this.selectedMouthCloseWidth = 0;
-        this.selectedMouthCloseHeight = 0;
     }
 
     private void drawBackdrop(GuiGraphics drawContext) {
@@ -1397,6 +1402,35 @@ extends Screen {
     }
 
     private static void drawRectBorder(GuiGraphics drawContext, int n, int n2, int n3, int n4, int n5) {
+        drawContext.fill(n, n2, n + n3, n2 + 1, n5);
+        drawContext.fill(n, n2 + n4 - 1, n + n3, n2 + n4, n5);
+        drawContext.fill(n, n2 + 1, n + 1, n2 + n4 - 1, n5);
+        drawContext.fill(n + n3 - 1, n2 + 1, n + n3, n2 + n4 - 1, n5);
+    }
+
+    private void renderTabs(GuiGraphics drawContext, int mouseX, int mouseY, boolean wardrobeActive) {
+        int centerX = this.width / 2;
+        int tabY = 6;
+        int tabW = 80;
+        int tabH = 18;
+        int x1 = centerX - 85;
+        int x2 = centerX + 5;
+
+        // Tab 1: My Skins
+        boolean hover1 = mouseX >= x1 && mouseX < x1 + tabW && mouseY >= tabY && mouseY < tabY + tabH;
+        int bg1 = wardrobeActive ? -1554030753 : (hover1 ? 0x55444444 : 0x3D232323);
+        drawContext.fill(x1, tabY, x1 + tabW, tabY + tabH, bg1);
+        String text1 = "My Skins";
+        int textW1 = this.font.width(text1);
+        drawContext.drawString(this.font, Component.literal(text1), x1 + (tabW - textW1) / 2, tabY + (tabH - 8) / 2, -1);
+
+        // Tab 2: Settings
+        boolean hover2 = mouseX >= x2 && mouseX < x2 + tabW && mouseY >= tabY && mouseY < tabY + tabH;
+        int bg2 = !wardrobeActive ? -1554030753 : (hover2 ? 0x55444444 : 0x3D232323);
+        drawContext.fill(x2, tabY, x2 + tabW, tabY + tabH, bg2);
+        String text2 = "Settings";
+        int textW2 = this.font.width(text2);
+        drawContext.drawString(this.font, Component.literal(text2), x2 + (tabW - textW2) / 2, tabY + (tabH - 8) / 2, -1);
     }
 
     private boolean isInside(int n, int n2, int n3, int n4, int n5, int n6) {
@@ -1639,11 +1673,7 @@ extends Screen {
         Toasts.error((Component)Component.translatable((String)"title.skin_management"), (Component)Component.translatable((String)string, (Object[])objectArray));
     }
 
-    private static enum MouthVariant {
-        OPEN,
-        CLOSE;
 
-    }
 
     private static enum ButtonStyle {
         SECONDARY,

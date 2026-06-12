@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
+import java.io.File;
 import java.lang.management.ManagementFactory;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -30,7 +31,17 @@ public final class CatskincRemakeClient {
             return;
         }
         initialized = true;
+        System.setProperty("http.maxConnections", "50");
         ModLog.info("Initializing CatSkinC-Remake client");
+
+        File gameDir = null;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null) {
+                gameDir = mc.gameDirectory;
+            }
+        } catch (Throwable ignored) {}
+        ModConfig.init(gameDir);
 
         applyConfig();
         VoiceStateNetworkClient.init();
@@ -125,8 +136,8 @@ public final class CatskincRemakeClient {
         if (devDiagnostics) {
             ModLog.debug("Dev diagnostics enabled (debugger/flag detected)");
         }
-        SkinManagerClient.setRefreshIntervalMs(DEFAULT_REFRESH_INTERVAL_MS);
-        VoiceActivityTracker.configure(DEFAULT_VOICE_AMPLITUDE_THRESHOLD, DEFAULT_VOICE_HOLD_MS);
+        SkinManagerClient.setRefreshIntervalMs(15 * 1000L);
+        VoiceActivityTracker.configure(180, 420);
     }
 
     private static boolean isDevDiagnosticsDefaultOn() {
@@ -180,13 +191,19 @@ public final class CatskincRemakeClient {
                 SkinManagerClient.fetchAndApplyFor(client.player.getUUID());
             }
 
-            Toasts.ConnectionToast toast = Toasts.connection(
-                    Component.translatable("title.skin_cloud"),
-                    Component.translatable("toast.cloud.checking"));
-            ServerApiClient.pingAsyncOk().thenAccept(ok -> client.execute(() -> toast.complete(Boolean.TRUE.equals(ok),
-                    Component.translatable(Boolean.TRUE.equals(ok)
-                            ? "toast.cloud.connected"
-                            : "toast.cloud.failed").getString())));
+            if (ModConfig.get().isShowConnectionToast()) {
+                Toasts.ConnectionToast toast = Toasts.connection(
+                        Component.translatable("title.skin_cloud"),
+                        Component.translatable("toast.cloud.checking"));
+                ServerApiClient.pingAsyncOk().thenAccept(ok -> client.execute(() -> {
+                    if (toast != null) {
+                        toast.complete(Boolean.TRUE.equals(ok),
+                                Component.translatable(Boolean.TRUE.equals(ok)
+                                        ? "toast.cloud.connected"
+                                        : "toast.cloud.failed").getString());
+                    }
+                }));
+            }
 
             ModrinthVersionChecker.checkForUpdatesAsync().thenAccept(result -> {
                 if (!ModrinthVersionChecker.tryMarkNotified(result)) {

@@ -22,11 +22,9 @@ class SkinManagerClientTextureOwnershipTest {
         String source = Files.readString(sourcePath());
 
         assertTrue(source.contains("skinConsumed")
-                        && source.contains("idleConsumed")
                         && source.contains("talkingConsumed"),
                 "the apply path should track which images a DynamicTexture took ownership of");
         assertTrue(source.contains("if (!skinConsumed)")
-                        && source.contains("if (!idleConsumed)")
                         && source.contains("if (!talkingConsumed)"),
                 "the catch block should release only images not yet consumed");
         // The old buggy catch closed images.mouthOpenImage/mouthCloseImage again,

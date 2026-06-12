@@ -31,14 +31,6 @@ public final class PlayerSkinOverrideResolver {
             return null;
         }
 
-        // Yield to Figura: if this player currently has an active Figura avatar, do not override
-        // their texture or model. On 1.21.1 both attributes flow through getSkin(), so fighting
-        // Figura there leaves a player with the CatSkinC texture but the wrong (wide) model and
-        // overwritten avatar parts. Letting Figura win avoids both symptoms.
-        if (FiguraCompat.hasActiveAvatar(uuid)) {
-            return null;
-        }
-
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
         if (entry != null && entry.texture != null) {
             return new ResolvedOverride(entry.texture, entry.slim);

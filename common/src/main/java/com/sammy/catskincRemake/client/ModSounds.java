@@ -46,6 +46,13 @@ public final class ModSounds {
         }
     }
 
+    public static void playClick() {
+        try {
+            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.value(), 1.0F));
+        } catch (Exception ignored) {
+        }
+    }
+
     private static String detectRegistryModId() {
         try {
             Class.forName("net.neoforged.fml.loading.FMLLoader");

@@ -24,20 +24,24 @@ public final class Toasts {
     }
 
     public static void info(Component title, Component description) {
+        if (!ModConfig.get().isShowInfoToast()) return;
         Minecraft.getInstance().getToasts().addToast(new SimpleToast(title, description, COLOR_TITLE));
     }
 
     public static void error(Component title, Component description) {
+        if (!ModConfig.get().isShowErrorToast()) return;
         Minecraft.getInstance().getToasts().addToast(new SimpleToast(title, description, COLOR_TITLE_ERROR));
     }
 
     public static UploadToast showUpload(Component title, Component subtitle) {
+        if (!ModConfig.get().isShowUploadToast()) return null;
         UploadToast toast = new UploadToast(title, subtitle);
         Minecraft.getInstance().getToasts().addToast(toast);
         return toast;
     }
 
     public static ConnectionToast connection(Component title, Component checkingMessage) {
+        if (!ModConfig.get().isShowConnectionToast()) return null;
         ConnectionToast toast = new ConnectionToast(title, checkingMessage);
         Minecraft.getInstance().getToasts().addToast(toast);
         return toast;
