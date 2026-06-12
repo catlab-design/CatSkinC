@@ -21,11 +21,9 @@ class SkinManagerClientTextureOwnershipTest {
         String source = Files.readString(sourcePath());
 
         assertTrue(source.contains("skinConsumed")
-                        && source.contains("idleConsumed")
                         && source.contains("talkingConsumed"),
                 "the apply path should track which images a texture took ownership of");
         assertTrue(source.contains("if (!skinConsumed)")
-                        && source.contains("if (!idleConsumed)")
                         && source.contains("if (!talkingConsumed)"),
                 "the catch block should release only images not yet consumed");
     }

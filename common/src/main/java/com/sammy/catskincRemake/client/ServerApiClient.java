@@ -89,6 +89,11 @@ public final class ServerApiClient {
         thread.setDaemon(true);
         return thread;
     });
+    private static final ExecutorService PING_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "CatSkinC-Ping");
+        thread.setDaemon(true);
+        return thread;
+    });
     private static final int BODY_PREVIEW_LIMIT = 220;
     private static final ProgressListener NO_OP_PROGRESS = new ProgressListener() {
     };
@@ -185,12 +190,29 @@ public final class ServerApiClient {
     }
 
     private static RuntimeConfig runtimeConfig() {
-        String baseUrl = DEFAULT_BASE_URL;
+        String baseUrl = ModConfig.get().getCatskinCloudIp();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            baseUrl = DEFAULT_BASE_URL;
+        } else {
+            baseUrl = baseUrl.trim();
+            if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+                if (baseUrl.startsWith("localhost") || baseUrl.startsWith("127.0.0.1")) {
+                    baseUrl = "http://" + baseUrl;
+                } else {
+                    baseUrl = "https://" + baseUrl;
+                }
+            }
+        }
         URL parsedBase;
         try {
             parsedBase = parseUrl(baseUrl);
         } catch (IOException ignored) {
-            throw new IllegalStateException("Unable to parse default API base URL");
+            baseUrl = DEFAULT_BASE_URL;
+            try {
+                parsedBase = parseUrl(baseUrl);
+            } catch (IOException ex) {
+                throw new IllegalStateException("Unable to parse default API base URL");
+            }
         }
         String apiHostPort = hostPortKey(parsedBase);
 
@@ -227,15 +249,10 @@ public final class ServerApiClient {
     }
 
     public static void uploadSkinAsync(File file, UUID playerUuid, boolean slim, ProgressListener callback) {
-        uploadSkinAsync(file, null, null, playerUuid, slim, callback);
+        uploadSkinAsync(file, null, playerUuid, slim, callback);
     }
 
-    public static void uploadSkinAsync(File file, File mouthFile, UUID playerUuid, boolean slim,
-            ProgressListener callback) {
-        uploadSkinAsync(file, mouthFile, null, playerUuid, slim, callback);
-    }
-
-    public static void uploadSkinAsync(File file, File mouthOpenFile, File mouthCloseFile, UUID playerUuid,
+    public static void uploadSkinAsync(File file, File mouthOpenFile, UUID playerUuid,
             boolean slim, ProgressListener callback) {
         ProgressListener listener = callback == null ? NO_OP_PROGRESS : callback;
         // Acquire session token before the upload thread starts to avoid
@@ -271,21 +288,14 @@ public final class ServerApiClient {
                 listener.onDone(false, "Invalid mouth_open file");
                 return;
             }
-            if (mouthCloseFile != null && !mouthCloseFile.isFile()) {
-                ModLog.warn("Upload aborted: invalid mouth_close file={}", mouthCloseFile);
-                listener.onDone(false, "Invalid mouth_close file");
-                return;
-            }
-            ModLog.debug("Upload start: file='{}', mouthOpen='{}', mouthClose='{}', size={} bytes, uuid={}, slim={}",
-                    safeFileName(file), safeFileName(mouthOpenFile), safeFileName(mouthCloseFile),
+            ModLog.debug("Upload start: file='{}', mouthOpen='{}', size={} bytes, uuid={}, slim={}",
+                    safeFileName(file), safeFileName(mouthOpenFile),
                     file.length(), playerUuid, slim);
             HttpURLConnection connection = null;
             try {
                 byte[] skinBytes = readFileBytes(file, cfg.maxImageBytes, "skin");
                 byte[] mouthOpenBytes = mouthOpenFile == null ? null
                         : readFileBytes(mouthOpenFile, cfg.maxImageBytes, "mouth_open");
-                byte[] mouthCloseBytes = mouthCloseFile == null ? null
-                        : readFileBytes(mouthCloseFile, cfg.maxImageBytes, "mouth_close");
 
                 String boundary = "----CatSkinC-" + System.nanoTime();
                 String requestId = newRequestId();
@@ -293,8 +303,7 @@ public final class ServerApiClient {
                         playerUuid,
                         slim,
                         skinBytes,
-                        mouthOpenBytes,
-                        mouthCloseBytes);
+                        mouthOpenBytes);
                 connection = open(
                         "POST",
                         cfg.pathUpload,
@@ -308,11 +317,10 @@ public final class ServerApiClient {
 
                 boolean includeLegacyMouth = mouthOpenBytes != null;
                 long multipartOverhead = estimateMultipartOverhead(
-                        boundary, playerUuid, slim, mouthOpenBytes != null, mouthCloseBytes != null,
+                        boundary, playerUuid, slim, mouthOpenBytes != null,
                         includeLegacyMouth);
                 long totalBytes = skinBytes.length
                         + (mouthOpenBytes == null ? 0L : mouthOpenBytes.length)
-                        + (mouthCloseBytes == null ? 0L : mouthCloseBytes.length)
                         + multipartOverhead;
                 listener.onStart(totalBytes);
 
@@ -356,15 +364,6 @@ public final class ServerApiClient {
                         writer.append("Content-Type: image/png").append("\r\n\r\n");
                         writer.flush();
                         out.write(mouthOpenBytes);
-                    }
-                    if (mouthCloseBytes != null) {
-                        writer.append("\r\n--").append(boundary).append("\r\n");
-                        writer.append(
-                                "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"")
-                                .append("\r\n");
-                        writer.append("Content-Type: image/png").append("\r\n\r\n");
-                        writer.flush();
-                        out.write(mouthCloseBytes);
                     }
 
                     out.flush();
@@ -507,12 +506,28 @@ public final class ServerApiClient {
             return;
         }
 
+        CompletableFuture<String> tokenFuture = acquireSessionTokenAsync(playerUuid);
         CompletableFuture.runAsync(() -> {
-            publishClearResult(callback, sendClearSelection(playerUuid, mode));
+            String sessionToken;
+            try {
+                sessionToken = tokenFuture.get();
+            } catch (Exception ex) {
+                ModLog.warn("Session token acquisition failed before clear: {}", ex.getMessage());
+                sessionToken = null;
+            }
+            if (sessionToken == null || sessionToken.isBlank()) {
+                try {
+                    sessionToken = acquireSessionTokenAsync(playerUuid, true).get();
+                } catch (Exception ex) {
+                    ModLog.warn("Session token force-refresh failed before clear: {}", ex.getMessage());
+                    sessionToken = null;
+                }
+            }
+            publishClearResult(callback, sendClearSelection(playerUuid, mode, sessionToken));
         }, EXECUTOR);
     }
 
-    private static ClearResult sendClearSelection(UUID playerUuid, String mode) {
+    private static ClearResult sendClearSelection(UUID playerUuid, String mode, String sessionToken) {
         HttpURLConnection connection = null;
         try {
             RuntimeConfig cfg = runtimeConfig();
@@ -526,6 +541,9 @@ public final class ServerApiClient {
                     sha256Hex(bodyBytes),
                     requestId,
                     true);
+            if (sessionToken != null && !sessionToken.isBlank()) {
+                connection.setRequestProperty(HEADER_SESSION, sessionToken);
+            }
             try (OutputStream out = connection.getOutputStream()) {
                 out.write(bodyBytes);
             }
@@ -535,6 +553,15 @@ public final class ServerApiClient {
             if (code == 426) {
                 notifyClientOutdated();
                 return new ClearResult(false, false, mode, "CLIENT_UPDATE_REQUIRED");
+            }
+            if (code == 401) {
+                clearSessionToken(playerUuid);
+                ModLog.warn("Clear 401: session token rejected for uuid={}", playerUuid);
+                return new ClearResult(false, false, mode, "Session token invalid or expired. Please try again.");
+            }
+            if (code == 403) {
+                ModLog.warn("Clear 403: session UUID mismatch for uuid={}", playerUuid);
+                return new ClearResult(false, false, mode, "Session UUID mismatch.");
             }
             if (code / 100 != 2) {
                 String message = httpErrorMessage(responseBody, code);
@@ -756,7 +783,7 @@ public final class ServerApiClient {
             } finally {
                 disconnectQuietly(connection);
             }
-        }, EXECUTOR);
+        }, PING_EXECUTOR);
     }
 
     public static String endpointPublicPng(String id) {
@@ -1245,7 +1272,6 @@ public final class ServerApiClient {
             UUID playerUuid,
             boolean slim,
             boolean includeMouthOpen,
-            boolean includeMouthClose,
             boolean includeLegacyMouth) {
         long overhead = 0;
         // uuid part
@@ -1272,13 +1298,6 @@ public final class ServerApiClient {
             overhead += "\r\n".length();
             overhead += ("--" + boundary + "\r\n").length();
             overhead += "Content-Disposition: form-data; name=\"mouth\"; filename=\"mouth-open.png\"\r\n".length();
-            overhead += "Content-Type: image/png\r\n\r\n".length();
-        }
-        if (includeMouthClose) {
-            overhead += "\r\n".length();
-            overhead += ("--" + boundary + "\r\n").length();
-            overhead += "Content-Disposition: form-data; name=\"mouth_close\"; filename=\"mouth-close.png\"\r\n"
-                    .length();
             overhead += "Content-Type: image/png\r\n\r\n".length();
         }
         // closing boundary
@@ -1529,15 +1548,14 @@ public final class ServerApiClient {
             UUID playerUuid,
             boolean slim,
             byte[] skinBytes,
-            byte[] mouthOpenBytes,
-            byte[] mouthCloseBytes) throws IOException {
+            byte[] mouthOpenBytes) throws IOException {
         ByteArrayOutputStream canonical = new ByteArrayOutputStream();
         appendHashField(canonical, "uuid", playerUuid == null ? new byte[0]
                 : playerUuid.toString().getBytes(StandardCharsets.UTF_8));
         appendHashField(canonical, "slim", (slim ? "true" : "false").getBytes(StandardCharsets.UTF_8));
         appendHashField(canonical, "file", skinBytes == null ? new byte[0] : skinBytes);
         appendHashField(canonical, "mouth_open", mouthOpenBytes == null ? new byte[0] : mouthOpenBytes);
-        appendHashField(canonical, "mouth_close", mouthCloseBytes == null ? new byte[0] : mouthCloseBytes);
+        appendHashField(canonical, "mouth_close", new byte[0]);
         return sha256Hex(canonical.toByteArray());
     }
 
