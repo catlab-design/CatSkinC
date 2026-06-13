@@ -37,7 +37,8 @@ dependencies {
     implementation "dev.architectury:architectury-neoforge:$rootProject.ext.selectedArchitecturyVersion"
 
     common(project(':common')) { transitive false }
-    shadowBundle project(':common')
+    shadowBundle(project(':common')) { transitive false }
+
 }
 
 processResources {
