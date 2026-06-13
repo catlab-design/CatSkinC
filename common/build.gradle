@@ -1,0 +1,25 @@
+architectury {
+    common rootProject.enabled_platforms.split(',')
+}
+
+dependencies {
+    implementation "net.fabricmc:fabric-loader:$rootProject.ext.selectedFabricLoaderVersion"
+
+    implementation "dev.architectury:architectury:$rootProject.ext.selectedArchitecturyVersion"
+
+    // Optional voice integrations (Simple Voice Chat + Plasmo Voice)
+    compileOnly "de.maxhenkel.voicechat:voicechat-api:$rootProject.voicechat_api_version"
+    compileOnly "su.plo.voice.api:common:$rootProject.plasmo_voice_api_version"
+    compileOnly "su.plo.voice.api:client:$rootProject.plasmo_voice_api_version"
+    compileOnly "su.plo.voice.api:server:$rootProject.plasmo_voice_api_version"
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
+
+    testImplementation platform("org.junit:junit-bom:5.10.2")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+

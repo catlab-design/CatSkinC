@@ -1,0 +1,67 @@
+modLoader = "javafml"
+loaderVersion = "${javafml_loader_range}"
+#issueTrackerURL = ""
+license = "GPL-3.0-or-later"
+
+[[mods]]
+modId = "catskinc"
+version = "${version}"
+displayName = "CatSkinC"
+authors = "Team CatLab Design"
+description = '''
+
+'''
+#logoFile = ""
+
+[[dependencies.catskinc]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_loader_range}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.catskinc]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.catskinc]]
+modId = "architectury"
+type = "required"
+versionRange = "${architectury_version_range}"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.catskinc]]
+modId = "voicechat"
+type = "optional"
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.catskinc]]
+modId = "plasmovoice"
+type = "optional"
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.catskinc]]
+modId = "figura"
+type = "optional"
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.catskinc]]
+modId = "emotecraft"
+type = "optional"
+versionRange = "[0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[mixins]]
+config = "catskinc.mixins.json"
+

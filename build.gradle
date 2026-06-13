@@ -1,0 +1,78 @@
+plugins {
+    id 'dev.architectury.loom-no-remap' version '1.14-SNAPSHOT' apply false
+    id 'architectury-plugin' version '3.5-SNAPSHOT'
+    id 'io.github.goooler.shadow' version '8.1.8' apply false
+}
+
+def requiredProp = { String key, String fallback = null ->
+    def value = findProperty(key)?.toString()
+    if (value != null && !value.isBlank()) {
+        return value
+    }
+    if (fallback != null) {
+        return fallback
+    }
+    throw new GradleException("Missing required Gradle property '${key}'")
+}
+
+ext.selectedJavaVersion = Integer.parseInt(requiredProp("java_version", "21"))
+ext.selectedMinecraftVersion = requiredProp("minecraft_version", "1.21.1")
+ext.selectedArchitecturyVersion = requiredProp("architectury_api_version")
+ext.selectedFabricLoaderVersion = requiredProp("fabric_loader_version")
+ext.selectedFabricApiVersion = requiredProp("fabric_api_version")
+ext.selectedNeoForgeVersion = requiredProp("neoforge_version")
+
+architectury {
+    minecraft = rootProject.ext.selectedMinecraftVersion
+}
+
+allprojects {
+    group = rootProject.maven_group
+    version = rootProject.mod_version
+}
+
+subprojects {
+    apply plugin: 'dev.architectury.loom-no-remap'
+    apply plugin: 'architectury-plugin'
+    apply plugin: 'maven-publish'
+
+    base {
+        // Set up a suffixed format for the mod jar names, e.g. `example-fabric`.
+        archivesName = "$rootProject.archives_name-$project.name"
+    }
+
+    repositories {
+        mavenCentral()
+        maven { url "https://maven.shedaniel.me/" }
+        maven { url "https://maven.terraformersmc.com/releases/" }
+        maven { url "https://maven.maxhenkel.de/repository/public" }
+        maven { url "https://repo.plasmoverse.com/releases" }
+    }
+
+    dependencies {
+        minecraft "com.mojang:minecraft:$rootProject.ext.selectedMinecraftVersion"
+    }
+
+    java {
+        withSourcesJar()
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(rootProject.ext.selectedJavaVersion)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.release = rootProject.ext.selectedJavaVersion
+        options.encoding = "UTF-8"
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                artifactId = base.archivesName.get()
+                from components.java
+            }
+        }
+    }
+}
+
+
