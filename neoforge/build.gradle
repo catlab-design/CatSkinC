@@ -58,9 +58,17 @@ processResources {
     }
 }
 
+// Give the plain jar a 'dev' suffix so shadowJar (the fat jar with common classes) can use '' classifier
+jar {
+    archiveClassifier = 'dev'
+}
+
 shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = ''
 }
+
+assemble.dependsOn shadowJar
+
 
 
