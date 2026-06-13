@@ -2,7 +2,7 @@
 
 All notable changes to this project should be documented in this file.
 
-## [3.1.0] - 2026-06-12
+## [3.1.0] - 2026-06-12 (Minecraft 26.1.2)
 
 ### Added
 
