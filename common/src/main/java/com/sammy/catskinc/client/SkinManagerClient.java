@@ -25,7 +25,9 @@ public final class SkinManagerClient {
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
 
-    private static volatile long refreshIntervalMs = 15_000L;
+    private static volatile long refreshIntervalMs = 5_000L;
+    private static final long FAST_RETRY_MS = 2_000L;
+    private static final Map<UUID, Long> FAST_RETRY_SCHEDULED = new ConcurrentHashMap<>();
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "CatSkinC-SkinManager");
@@ -54,9 +56,16 @@ public final class SkinManagerClient {
         }
         ResourceLocation rendered = resolveRenderTexture(uuid);
         if (rendered == null) {
-            fetchAndApplyFor(uuid);
+            // Fast-retry: if this UUID has no cached texture, schedule a quick re-fetch
+            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+            long now = System.currentTimeMillis();
+            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                FAST_RETRY_SCHEDULED.put(uuid, now);
+                fetchAndApplyFor(uuid);
+            }
             return null;
         }
+        FAST_RETRY_SCHEDULED.remove(uuid);
         if (shouldPoll(uuid)) {
             fetchAndApplyFor(uuid);
         }
@@ -144,7 +153,6 @@ public final class SkinManagerClient {
                             mouthOpenRequested));
         }).whenCompleteAsync((images, throwable) -> {
             IN_FLIGHT.remove(uuid);
-            LAST_CHECK.put(uuid, System.currentTimeMillis());
             if (throwable != null) {
                 ModLog.error("Skin apply failed for uuid=" + uuid, throwable);
                 return;
@@ -153,6 +161,7 @@ public final class SkinManagerClient {
                 ModLog.trace("No texture update for {}", uuid);
                 return;
             }
+            LAST_CHECK.put(uuid, System.currentTimeMillis());
 
             Minecraft client = Minecraft.getInstance();
             if (client == null) {
@@ -376,7 +385,8 @@ public final class SkinManagerClient {
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
         IN_FLIGHT.clear();
-        refreshIntervalMs = 15_000L;
+        refreshIntervalMs = 5_000L;
+        FAST_RETRY_SCHEDULED.clear();
     }
 
     private record DownloadedImages(

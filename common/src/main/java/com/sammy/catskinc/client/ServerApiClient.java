@@ -34,6 +34,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import javax.crypto.Mac;
@@ -120,6 +121,9 @@ public final class ServerApiClient {
     private static final String SHA256_EMPTY_HEX =
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
+    /** Pending local selections to eliminate select-fetch race. Key: UUID, Value: skin URL. */
+    private static final ConcurrentHashMap<UUID, SelectedSkin> PENDING_SELECTIONS = new ConcurrentHashMap<>();
+
     /** Protocol version this client speaks. Must match server MIN_PROTOCOL_VERSION. */
     public static final int CLIENT_PROTOCOL_VERSION = 2;
     private static final String HEADER_PROTOCOL = "x-catskinc-protocol";
@@ -155,7 +159,7 @@ public final class ServerApiClient {
     private static volatile CachedPing cachedPing;
 
     // Circuit breaker: stops polling when server is unreachable
-    private static volatile int consecutiveFailures;
+    private static final AtomicInteger consecutiveFailures = new AtomicInteger();
     private static volatile long circuitOpenUntilMs;
     private static final int CIRCUIT_BREAKER_THRESHOLD = 3;
     private static final long CIRCUIT_BREAKER_COOLDOWN_MS = 30_000L;
@@ -408,17 +412,17 @@ public final class ServerApiClient {
         }, EXECUTOR);
     }
 
-    public static void selectSkin(UUID playerUuid, String skinIdOrUrl) {
-        selectSkin(playerUuid, skinIdOrUrl, null);
+    public static CompletableFuture<Void> selectSkin(UUID playerUuid, String skinIdOrUrl) {
+        return selectSkin(playerUuid, skinIdOrUrl, null);
     }
 
-    public static void selectSkin(UUID playerUuid, String skinIdOrUrl, Boolean slim) {
+    public static CompletableFuture<Void> selectSkin(UUID playerUuid, String skinIdOrUrl, Boolean slim) {
         if (playerUuid == null || skinIdOrUrl == null || skinIdOrUrl.isBlank()) {
             ModLog.trace("Select skin skipped: uuid or skin value missing");
-            return;
+            return CompletableFuture.completedFuture(null);
         }
         CompletableFuture<String> tokenFuture = acquireSessionTokenAsync(playerUuid);
-        CompletableFuture.runAsync(() -> {
+        return CompletableFuture.runAsync(() -> {
             String sessionToken;
             try {
                 sessionToken = tokenFuture.get();
@@ -476,6 +480,10 @@ public final class ServerApiClient {
                             bodyPreview(responseBody));
                 } else {
                     invalidateSelectedCache(playerUuid);
+                    PENDING_SELECTIONS.put(playerUuid, new SelectedSkin(
+                            ServerApiClient.endpointPublicPng(skinIdOrUrl),
+                            null, null,
+                            slim != null && slim));
                     ModLog.trace("Select skin ok: requestId={}, code={}, body={}", requestId, code,
                             bodyPreview(responseBody));
                 }
@@ -602,6 +610,14 @@ public final class ServerApiClient {
 
         RuntimeConfig cfg = runtimeConfig();
 
+        // Pending selection: return immediately after local upload (avoids select-fetch race)
+        SelectedSkin pending = PENDING_SELECTIONS.remove(playerUuid);
+        if (pending != null) {
+            ModLog.trace("Fetch selected using pending selection for {}", playerUuid);
+            SELECTED_CACHE.put(playerUuid, new CachedSelected(pending, System.currentTimeMillis()));
+            return CompletableFuture.completedFuture(pending);
+        }
+
         CachedSelected cached = SELECTED_CACHE.get(playerUuid);
         if (cached != null && (now - cached.cachedAtMs) <= cfg.selectedCacheTtlMs) {
             ModLog.trace("Fetch selected cache hit: {}", playerUuid);
@@ -634,7 +650,7 @@ public final class ServerApiClient {
                 }
 
                 // Success: reset circuit breaker
-                consecutiveFailures = 0;
+                consecutiveFailures.set(0);
                 circuitOpenUntilMs = 0L;
 
                 String url = jsonString(body, "url");
@@ -663,7 +679,7 @@ public final class ServerApiClient {
                         playerUuid, slim, url, mouthOpenUrl, mouthCloseUrl);
                 return selectedSkin;
             } catch (Exception exception) {
-                int failures = ++consecutiveFailures;
+                int failures = consecutiveFailures.incrementAndGet();
                 if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
                     circuitOpenUntilMs = System.currentTimeMillis() + CIRCUIT_BREAKER_COOLDOWN_MS;
                     ModLog.warn("API unreachable ({} failures), circuit breaker open for {} s: {}",
@@ -789,9 +805,18 @@ public final class ServerApiClient {
             return;
         }
         sseStop = false;
+        consecutiveFailures.set(0);
         sseThread = new Thread(() -> {
             int attempt = 0;
             while (!sseStop) {
+                // Check circuit breaker before attempting connection
+                long now = System.currentTimeMillis();
+                if (circuitOpenUntilMs > now) {
+                    ModLog.trace("SSE reconnect: circuit breaker open (retry in {} ms)",
+                            circuitOpenUntilMs - now);
+                    sleepQuietly(Math.min(circuitOpenUntilMs - now, 5_000L));
+                    continue;
+                }
                 attempt++;
                 HttpURLConnection connection = null;
                 try {
@@ -806,11 +831,17 @@ public final class ServerApiClient {
                         break;
                     }
                     if (code / 100 != 2) {
+                        consecutiveFailures.incrementAndGet();
                         String body = readBody(connection, code, cfg.maxJsonBytes);
                         ModLog.warn("SSE connect failed: code={}, body={}", code, bodyPreview(body));
-                        sleepQuietly(1_500L);
+                        long backoff = Math.min(1_500L * (1L << Math.min(attempt, 5)), 60_000L);
+                        sleepQuietly(backoff);
                         continue;
                     }
+                    // Reset circuit breaker on successful connection
+                    consecutiveFailures.set(0);
+                    circuitOpenUntilMs = 0L;
+                    attempt = 0;
                     ModLog.info("SSE connected");
                     try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                             connection.getInputStream(), StandardCharsets.UTF_8))) {
@@ -834,12 +865,16 @@ public final class ServerApiClient {
                     }
                     if (!sseStop) {
                         ModLog.warn("SSE stream closed, reconnecting");
+                        long backoff = Math.min(1_500L * (1L << Math.min(attempt, 5)), 60_000L);
+                        sleepQuietly(backoff);
                     }
                 } catch (Exception exception) {
                     if (!sseStop) {
+                        consecutiveFailures.incrementAndGet();
                         ModLog.warn("SSE error on attempt {}: {}", attempt, exception.getMessage());
                         ModLog.trace("SSE exception details", exception);
-                        sleepQuietly(1_500L);
+                        long backoff = Math.min(1_500L * (1L << Math.min(attempt, 5)), 60_000L);
+                        sleepQuietly(backoff);
                     }
                 } finally {
                     disconnectQuietly(connection);
@@ -868,6 +903,7 @@ public final class ServerApiClient {
         }
         SELECTED_CACHE.remove(uuid);
         SELECTED_IN_FLIGHT.remove(uuid);
+        PENDING_SELECTIONS.remove(uuid);
     }
 
     private static UpdateEvent parseUpdateEvent(String json) {
@@ -1283,8 +1319,9 @@ public final class ServerApiClient {
         SELECTED_CACHE.clear();
         SELECTED_IN_FLIGHT.clear();
         cachedPing = null;
-        consecutiveFailures = 0;
+        consecutiveFailures.set(0);
         circuitOpenUntilMs = 0L;
+        PENDING_SELECTIONS.clear();
         stopSse();
     }
 

@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 
 public final class CatskincClient {
     private static final int DEFAULT_OPEN_UI_KEY = 75;
-    private static final long DEFAULT_REFRESH_INTERVAL_MS = 15_000L;
+    private static final long DEFAULT_REFRESH_INTERVAL_MS = 5_000L;
     private static final int DEFAULT_ENSURE_INTERVAL_TICKS = 20;
     private static final int DEFAULT_ENSURE_LIMIT_PER_PASS = 16;
     private static final int DEFAULT_VOICE_AMPLITUDE_THRESHOLD = 180;
@@ -136,7 +136,7 @@ public final class CatskincClient {
         if (devDiagnostics) {
             ModLog.debug("Dev diagnostics enabled (debugger/flag detected)");
         }
-        SkinManagerClient.setRefreshIntervalMs(15 * 1000L);
+        SkinManagerClient.setRefreshIntervalMs(5 * 1000L);
         VoiceActivityTracker.configure(180, 420);
     }
 
@@ -180,7 +180,12 @@ public final class CatskincClient {
                 client.execute(() -> {
                     boolean isClearEvent = event.url == null || event.url.isBlank()
                             || event.id == null || event.id.isBlank();
-                    if (event.slim != null && !isClearEvent) {
+                    if (isClearEvent) {
+                        ModLog.debug("SSE clear event for {}: removing skin caches", event.uuid);
+                        SkinManagerClient.forceFetch(event.uuid);
+                        return;
+                    }
+                    if (event.slim != null) {
                         SkinManagerClient.setSlim(event.uuid, event.slim);
                     }
                     SkinManagerClient.forceFetch(event.uuid);

@@ -838,10 +838,12 @@ extends Screen {
                     }
                     ModSounds.play(ModSounds.UI_COMPLETE);
                     if (minecraftClient.player != null) {
+                        UUID uuid = minecraftClient.player.getUUID();
                         SkinUploadScreen.this.applyImmediateLocalSkinSelection(minecraftClient, bl);
-                        ServerApiClient.selectSkin(minecraftClient.player.getUUID(), string, bl);
-                        SkinManagerClient.setSlim(minecraftClient.player.getUUID(), bl);
-                        SkinManagerClient.refresh(minecraftClient.player.getUUID());
+                        ServerApiClient.selectSkin(uuid, string, bl).thenRun(() -> {
+                            SkinManagerClient.refresh(uuid);
+                        });
+                        SkinManagerClient.setSlim(uuid, bl);
                     }
                 });
             }

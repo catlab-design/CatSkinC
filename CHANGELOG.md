@@ -2,6 +2,22 @@
 
 All notable changes to this project should be documented in this file.
 
+## [3.1.1] - 2026-07-21
+
+### Fixed
+
+- Fixed SSE errors and skin applied delay (5-10s) after deep vulnerability investigation:
+  - **Select-Fetch race eliminated**: `selectSkin()` now chains `thenRun(refresh)` so the POST completes before the GET, eliminating the 4-8s skin delay after upload.
+  - **Pending selections cache**: `PENDING_SELECTIONS` returns the uploaded skin URL immediately after select, avoiding old-skin flashing.
+  - **LAST_CHECK on success only**: failed fetches no longer reset the 5s poll timer, preventing a 15s blackout window.
+  - **Fast-retry after null skin**: retries fetch in 2s when the server has no cached skin yet, reducing initial sync from 15s to 2s.
+  - **Poll interval reduced**: 15s → 5s for faster periodic sync.
+  - **SSE clear-skin handling**: clears `BASE_CACHE`/`TALKING_CACHE` on null URL, so players properly revert to the default skin.
+  - **SSE reconnect delay**: added 1.5s–60s exponential backoff on stream close (was instant reconnect), preventing server flooding.
+  - **Circuit breaker in SSE**: SSE checks `circuitOpenUntilMs` before connecting, eliminating useless retries during outage.
+  - **AtomicInteger**: `consecutiveFailures` switched to `AtomicInteger` for correct failure counting.
+  - **Always destroy old textures**: removed identity check gate on texture release to prevent GPU memory leaks.
+
 ## [3.1.0] - 2026-06-12
 
 ### Added
