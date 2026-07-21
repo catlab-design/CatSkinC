@@ -28,6 +28,7 @@ All notable changes to this project should be documented in this file.
 - Fixed SSE thread leak: `sseConnection` field properly closed in `stopSse()`.
 - Fixed selectSkin missing forceRefresh retry: retries session token with forceRefresh=true on null.
 - Fixed NativeImage leak in `refreshPreviewTexture()`: NativeImage now properly closed on exception paths.
+- **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
 
 ## [3.1.0] - 2026-06-12
 

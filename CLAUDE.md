@@ -281,5 +281,6 @@ Enabled by default (`harden_build=true` in `gradle.properties`):
 | 14 | **SSE thread leak fix** — volatile `sseConnection` field, closed in `stopSse()` | Prevents connection leak on mod unload |
 | 15 | **selectSkin forceRefresh retry** — retries session token with forceRefresh=true on null | Recovers from stale tokens |
 | 16 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
+| 17 | **Signed download URLs** — `downloadImageAsync()` appends `?exp=&sig=` HMAC query params using `requestSigningKey` | Resolves HTTP 401 when server enforces signed downloads |
 
 > **Last updated:** 2026-07-21
