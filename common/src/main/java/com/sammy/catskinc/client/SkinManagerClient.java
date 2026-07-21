@@ -222,7 +222,7 @@ public final class SkinManagerClient {
                     baseTexture.setFilter(false, false);
                     textureManager.registerTexture(baseId, baseTexture);
                     BASE_CACHE.put(uuid, baseId);
-                    if (oldBaseId != null) {
+                    if (oldBaseId != null && !oldBaseId.equals(baseId)) {
                         textureManager.destroyTexture(oldBaseId);
                     }
 
@@ -235,7 +235,7 @@ public final class SkinManagerClient {
                         textureManager.registerTexture(talkingId, talkingTexture);
                         TALKING_CACHE.put(uuid, talkingId);
                     }
-                    if (oldTalkingId != null) {
+                    if (oldTalkingId != null && !oldTalkingId.equals(talkingId)) {
                         textureManager.destroyTexture(oldTalkingId);
                     }
 

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>net.fabricmc.fabric-api</groupId>
+  <artifactId>fabric-events-lifecycle-v0</artifactId>
+  <version>0.2.64+df3654b377</version>
+  <name>Fabric Events Lifecycle (v0)</name>
+  <description>Legacy events for the game's lifecycle, superseded by fabric-lifecycle-events-v1 and fabric-item-api-v1.</description>
+  <url>https://github.com/FabricMC/fabric/tree/HEAD/deprecated/fabric-events-lifecycle-v0</url>
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://github.com/FabricMC/fabric/blob/HEAD/LICENSE</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>FabricMC</name>
+      <url>https://fabricmc.net/</url>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/FabricMC/fabric.git</connection>
+    <developerConnection>scm:git:git@github.com:FabricMC/fabric.git</developerConnection>
+    <url>https://github.com/FabricMC/fabric</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/FabricMC/fabric/issues</url>
+  </issueManagement>
+  <dependencies>
+    <dependency>
+      <groupId>net.fabricmc.fabric-api</groupId>
+      <artifactId>fabric-api-base</artifactId>
+      <version>0.4.32+1802ada577</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.fabricmc.fabric-api</groupId>
+      <artifactId>fabric-item-api-v1</artifactId>
+      <version>2.1.29+1802ada577</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.fabricmc.fabric-api</groupId>
+      <artifactId>fabric-lifecycle-events-v1</artifactId>
+      <version>2.2.23+1802ada577</version>
+      <scope>compile</scope>
+    </dependency>
+  </dependencies>
+</project>

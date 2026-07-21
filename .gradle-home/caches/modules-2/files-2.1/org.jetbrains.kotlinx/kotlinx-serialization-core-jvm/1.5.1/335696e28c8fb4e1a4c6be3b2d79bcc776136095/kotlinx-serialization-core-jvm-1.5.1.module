@@ -1,0 +1,135 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "url": "../../kotlinx-serialization-core/1.5.1/kotlinx-serialization-core-1.5.1.module",
+    "group": "org.jetbrains.kotlinx",
+    "module": "kotlinx-serialization-core",
+    "version": "1.5.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.6.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "jvmApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.21"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-bom",
+          "version": {
+            "requires": "1.5.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-common",
+          "version": {
+            "requires": "1.8.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-serialization-core-jvm-1.5.1.jar",
+          "url": "kotlinx-serialization-core-jvm-1.5.1.jar",
+          "size": 416992,
+          "sha512": "4a7694407ccb0469a332d8a2a41307a4838388c5c9607371612ce63a36a0109837d4560819ef094480d16101d8def2dfc44533a2cb9fcd3c1918857eb78c7143",
+          "sha256": "a4053a35abeb59bf707d7948245556fe8dc379e9cfed088aec08134c899605d4",
+          "sha1": "e26cf5dfbcfe3e82ca196694dfd305753b1a49b9",
+          "md5": "cc0ba77add41f0ddf1842e067d7cca27"
+        }
+      ]
+    },
+    {
+      "name": "jvmRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.21"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-bom",
+          "version": {
+            "requires": "1.5.1"
+          },
+          "attributes": {
+            "org.gradle.category": "platform"
+          },
+          "endorseStrictVersions": true
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-common",
+          "version": {
+            "requires": "1.8.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "kotlinx-serialization-core-jvm-1.5.1.jar",
+          "url": "kotlinx-serialization-core-jvm-1.5.1.jar",
+          "size": 416992,
+          "sha512": "4a7694407ccb0469a332d8a2a41307a4838388c5c9607371612ce63a36a0109837d4560819ef094480d16101d8def2dfc44533a2cb9fcd3c1918857eb78c7143",
+          "sha256": "a4053a35abeb59bf707d7948245556fe8dc379e9cfed088aec08134c899605d4",
+          "sha1": "e26cf5dfbcfe3e82ca196694dfd305753b1a49b9",
+          "md5": "cc0ba77add41f0ddf1842e067d7cca27"
+        }
+      ]
+    },
+    {
+      "name": "jvmSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "files": [
+        {
+          "name": "kotlinx-serialization-core-jvm-1.5.1-sources.jar",
+          "url": "kotlinx-serialization-core-jvm-1.5.1-sources.jar",
+          "size": 104265,
+          "sha512": "ebb8df1e271effe365639738849835ae3879412338b5a6497d373df9b9e4f68ee6c82c130ceb7ad16c8bf25c12d5fd6dc834365620a5f39ea972adfa8f9ef543",
+          "sha256": "9732c71a3ab84c76a9f0737048eb982d557fe17d4e1c4e96a436840cff8966b2",
+          "sha1": "ab64903f6ac788a84aa630ecb6a59da88a4b96db",
+          "md5": "e42e64c22dd0c2b406b0db10db6ce5e1"
+        }
+      ]
+    }
+  ]
+}

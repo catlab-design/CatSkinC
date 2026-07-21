@@ -161,6 +161,7 @@ public final class ServerApiClient {
 
     private static volatile Thread sseThread;
     private static volatile boolean sseStop;
+    private static volatile HttpURLConnection sseConnection;
     private static final ConcurrentHashMap<UUID, CachedSelected> SELECTED_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, CompletableFuture<SelectedSkin>> SELECTED_IN_FLIGHT = new ConcurrentHashMap<>();
     private static volatile CachedPing cachedPing;
@@ -440,6 +441,14 @@ public final class ServerApiClient {
             } catch (Exception ex) {
                 ModLog.warn("Session token acquisition failed before select: {}", ex.getMessage());
                 sessionToken = null;
+            }
+            if (sessionToken == null || sessionToken.isBlank()) {
+                try {
+                    sessionToken = acquireSessionTokenAsync(playerUuid, true).get();
+                } catch (Exception ex) {
+                    ModLog.warn("Session token force-refresh failed before select: {}", ex.getMessage());
+                    sessionToken = null;
+                }
             }
             HttpURLConnection connection = null;
             try {
@@ -836,6 +845,7 @@ public final class ServerApiClient {
                     String requestId = newRequestId();
                     ModLog.debug("SSE connect attempt {} -> {}", attempt, cfg.pathEvents);
                     connection = openSse(cfg.pathEvents, requestId);
+                    sseConnection = connection;
                     int code = responseCode(connection, requestId);
                     if (code == 426) {
                         notifyClientOutdated();
@@ -889,6 +899,9 @@ public final class ServerApiClient {
                         sleepQuietly(backoff);
                     }
                 } finally {
+                    if (sseConnection == connection) {
+                        sseConnection = null;
+                    }
                     disconnectQuietly(connection);
                 }
             }
@@ -901,6 +914,11 @@ public final class ServerApiClient {
 
     public static synchronized void stopSse() {
         sseStop = true;
+        HttpURLConnection conn = sseConnection;
+        sseConnection = null;
+        if (conn != null) {
+            disconnectQuietly(conn);
+        }
         Thread thread = sseThread;
         sseThread = null;
         ModLog.debug("Stopping SSE thread");

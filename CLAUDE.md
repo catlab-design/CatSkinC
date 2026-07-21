@@ -261,4 +261,25 @@ Enabled by default (`harden_build=true` in `gradle.properties`):
 
 ---
 
+## Recent Fixes (2026-07-21)
+
+| # | Fix | Impact |
+|---|-----|--------|
+| 1 | **Select-Fetch race fixed** — `selectSkin().thenRun(refresh)` chains POST before GET | Eliminates 4-8s skin delay after upload |
+| 2 | **Pending selections cache** — `PENDING_SELECTIONS` returns uploaded skin immediately | No more old-skin flashing |
+| 3 | **LAST_CHECK on success only** — failed fetches no longer reset the 5s poll timer | Prevents 15s blackout window |
+| 4 | **Fast-retry after null** — retries fetch in 2s when server has no skin | Reduces initial sync from 15s to 2s |
+| 5 | **Poll interval reduced** — 15s → 5s | Faster periodic sync |
+| 6 | **SSE clear-skin** — clears `BASE_CACHE`/`TALKING_CACHE` on null URL | Player reverts to default skin |
+| 7 | **SSE reconnect delay** — added 1.5s backoff on stream close (was instant) | Prevents server flooding |
+| 8 | **Circuit breaker in SSE** — SSE checks `circuitOpenUntilMs` before connecting | No useless retries during outage |
+| 9 | **Exponential backoff** — SSE retries scale from 1.5s to 60s max | Thundering herd prevention |
+| 10 | **AtomicInteger** — `consecutiveFailures` is now atomic | Correct failure counting |
+| 11 | **Always destroy old textures** — removed identity check gate | Prevents GPU memory leak |
+| 12 | **SSE clear event handling** — distinguishes clear vs update events | Correct behavior on skin removal |
+| 13 | **Texture self-destroy check** — added `!equals` guard before `destroyTexture()` | Prevents destroying identical texture IDs |
+| 14 | **SSE thread leak fix** — volatile `sseConnection` field, closed in `stopSse()` | Prevents connection leak on mod unload |
+| 15 | **selectSkin forceRefresh retry** — retries session token with forceRefresh=true on null | Recovers from stale tokens |
+| 16 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
+
 > **Last updated:** 2026-07-21

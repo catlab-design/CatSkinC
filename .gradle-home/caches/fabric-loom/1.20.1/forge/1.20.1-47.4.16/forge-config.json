@@ -1,0 +1,278 @@
+{
+  "patchesOriginalPrefix": "a/",
+  "patchesModifiedPrefix": "b/",
+  "modules": [
+    "cpw.mods:bootstraplauncher:1.1.2",
+    "cpw.mods:securejarhandler:2.1.10",
+    "org.ow2.asm:asm-commons:9.8",
+    "org.ow2.asm:asm-util:9.8",
+    "org.ow2.asm:asm-analysis:9.8",
+    "org.ow2.asm:asm-tree:9.8",
+    "org.ow2.asm:asm:9.8",
+    "net.minecraftforge:JarJarFileSystems:0.3.19"
+  ],
+  "extraDependencies": {
+    "runtimeOnly": [],
+    "compileOnly": [],
+    "annotationProcessor": []
+  },
+  "sourceFileCharset": "UTF-8",
+  "mcp": "de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412@zip",
+  "ats": [
+    "ats/accesstransformer.cfg"
+  ],
+  "sass": [
+    "sas/forge.sas"
+  ],
+  "binpatches": "joined.lzma",
+  "binpatcher": {
+    "version": "net.minecraftforge:binarypatcher:1.1.1:fatjar",
+    "args": [
+      "--clean",
+      "{clean}",
+      "--output",
+      "{output}",
+      "--apply",
+      "{patch}"
+    ]
+  },
+  "patches": "patches/",
+  "sources": "net.minecraftforge:forge:1.20.1-47.4.16:sources@jar",
+  "universal": "net.minecraftforge:forge:1.20.1-47.4.16:universal@jar",
+  "libraries": [
+    "cpw.mods:securejarhandler:2.1.10",
+    "org.ow2.asm:asm:9.8",
+    "org.ow2.asm:asm-commons:9.8",
+    "org.ow2.asm:asm-tree:9.8",
+    "org.ow2.asm:asm-util:9.8",
+    "org.ow2.asm:asm-analysis:9.8",
+    "net.minecraftforge:accesstransformers:8.0.4",
+    "org.antlr:antlr4-runtime:4.9.1",
+    "net.minecraftforge:eventbus:6.2.33",
+    "net.minecraftforge:forgespi:7.0.1",
+    "net.minecraftforge:coremods:5.2.4",
+    "cpw.mods:modlauncher:10.0.9",
+    "net.minecraftforge:unsafe:0.2.0",
+    "net.minecraftforge:mergetool:1.1.5:api",
+    "com.electronwill.night-config:core:3.6.4",
+    "com.electronwill.night-config:toml:3.6.4",
+    "org.apache.maven:maven-artifact:3.8.5",
+    "net.jodah:typetools:0.6.3",
+    "net.minecrell:terminalconsoleappender:1.2.0",
+    "org.jline:jline-reader:3.12.1",
+    "org.jline:jline-terminal:3.12.1",
+    "org.spongepowered:mixin:0.8.5",
+    "org.openjdk.nashorn:nashorn-core:15.4",
+    "net.minecraftforge:JarJarSelector:0.3.19",
+    "net.minecraftforge:JarJarMetadata:0.3.19",
+    "cpw.mods:bootstraplauncher:1.1.2",
+    "cpw.mods:securejarhandler:2.1.10",
+    "org.ow2.asm:asm-commons:9.8",
+    "org.ow2.asm:asm-util:9.8",
+    "org.ow2.asm:asm-analysis:9.8",
+    "org.ow2.asm:asm-tree:9.8",
+    "org.ow2.asm:asm:9.8",
+    "net.minecraftforge:JarJarFileSystems:0.3.19",
+    "net.minecraftforge:fmlcore:1.20.1-47.4.16",
+    "net.minecraftforge:fmlloader:1.20.1-47.4.16",
+    "net.minecraftforge:fmlearlydisplay:1.20.1-47.4.16",
+    "net.minecraftforge:javafmllanguage:1.20.1-47.4.16",
+    "net.minecraftforge:lowcodelanguage:1.20.1-47.4.16",
+    "net.minecraftforge:mclanguage:1.20.1-47.4.16"
+  ],
+  "runs": {
+    "server": {
+      "name": "server",
+      "main": "cpw.mods.bootstraplauncher.BootstrapLauncher",
+      "parents": [],
+      "args": [
+        "--launchTarget",
+        "forgeserveruserdev",
+        "--gameDir",
+        ".",
+        "--fml.forgeVersion",
+        "47.4.16",
+        "--fml.mcVersion",
+        "1.20.1",
+        "--fml.forgeGroup",
+        "net.minecraftforge",
+        "--fml.mcpVersion",
+        "20230612.114412"
+      ],
+      "jvmArgs": [
+        "-Djava.net.preferIPv6Addresses\u003dsystem",
+        "-p",
+        "{modules}",
+        "--add-modules",
+        "ALL-MODULE-PATH",
+        "--add-opens",
+        "java.base/java.util.jar\u003dcpw.mods.securejarhandler",
+        "--add-opens",
+        "java.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "java.base/sun.security.util\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "jdk.naming.dns/com.sun.jndi.dns\u003djava.naming"
+      ],
+      "client": false,
+      "buildAllProjects": false,
+      "env": {
+        "MOD_CLASSES": "{source_roots}",
+        "MCP_MAPPINGS": "{mcp_mappings}"
+      },
+      "props": {
+        "legacyClassPath.file": "{minecraft_classpath_file}",
+        "ignoreList": "bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,JarJarFileSystems,client-extra,fmlcore,javafmllanguage,lowcodelanguage,mclanguage,forge-",
+        "mergeModules": "jna-5.10.0.jar,jna-platform-5.10.0.jar",
+        "forge.enableGameTest": "true"
+      }
+    },
+    "data": {
+      "name": "data",
+      "main": "cpw.mods.bootstraplauncher.BootstrapLauncher",
+      "parents": [],
+      "args": [
+        "--launchTarget",
+        "forgedatauserdev",
+        "--assetIndex",
+        "{asset_index}",
+        "--assetsDir",
+        "{assets_root}",
+        "--gameDir",
+        ".",
+        "--fml.forgeVersion",
+        "47.4.16",
+        "--fml.mcVersion",
+        "1.20.1",
+        "--fml.forgeGroup",
+        "net.minecraftforge",
+        "--fml.mcpVersion",
+        "20230612.114412"
+      ],
+      "jvmArgs": [
+        "-Djava.net.preferIPv6Addresses\u003dsystem",
+        "-p",
+        "{modules}",
+        "--add-modules",
+        "ALL-MODULE-PATH",
+        "--add-opens",
+        "java.base/java.util.jar\u003dcpw.mods.securejarhandler",
+        "--add-opens",
+        "java.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "java.base/sun.security.util\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "jdk.naming.dns/com.sun.jndi.dns\u003djava.naming"
+      ],
+      "client": false,
+      "buildAllProjects": false,
+      "env": {
+        "MOD_CLASSES": "{source_roots}",
+        "MCP_MAPPINGS": "{mcp_mappings}"
+      },
+      "props": {
+        "legacyClassPath.file": "{minecraft_classpath_file}",
+        "ignoreList": "bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,JarJarFileSystems,client-extra,fmlcore,javafmllanguage,lowcodelanguage,mclanguage,forge-",
+        "mergeModules": "jna-5.10.0.jar,jna-platform-5.10.0.jar"
+      }
+    },
+    "client": {
+      "name": "client",
+      "main": "cpw.mods.bootstraplauncher.BootstrapLauncher",
+      "parents": [],
+      "args": [
+        "--launchTarget",
+        "forgeclientuserdev",
+        "--version",
+        "MOD_DEV",
+        "--assetIndex",
+        "{asset_index}",
+        "--assetsDir",
+        "{assets_root}",
+        "--gameDir",
+        ".",
+        "--fml.forgeVersion",
+        "47.4.16",
+        "--fml.mcVersion",
+        "1.20.1",
+        "--fml.forgeGroup",
+        "net.minecraftforge",
+        "--fml.mcpVersion",
+        "20230612.114412"
+      ],
+      "jvmArgs": [
+        "-Djava.net.preferIPv6Addresses\u003dsystem",
+        "-p",
+        "{modules}",
+        "--add-modules",
+        "ALL-MODULE-PATH",
+        "--add-opens",
+        "java.base/java.util.jar\u003dcpw.mods.securejarhandler",
+        "--add-opens",
+        "java.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "java.base/sun.security.util\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "jdk.naming.dns/com.sun.jndi.dns\u003djava.naming"
+      ],
+      "client": true,
+      "buildAllProjects": false,
+      "env": {
+        "MOD_CLASSES": "{source_roots}",
+        "MCP_MAPPINGS": "{mcp_mappings}"
+      },
+      "props": {
+        "legacyClassPath.file": "{minecraft_classpath_file}",
+        "ignoreList": "bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,JarJarFileSystems,client-extra,fmlcore,javafmllanguage,lowcodelanguage,mclanguage,forge-",
+        "mergeModules": "jna-5.10.0.jar,jna-platform-5.10.0.jar",
+        "forge.enableGameTest": "true"
+      }
+    },
+    "gameTestServer": {
+      "name": "gameTestServer",
+      "main": "cpw.mods.bootstraplauncher.BootstrapLauncher",
+      "parents": [],
+      "args": [
+        "--launchTarget",
+        "forgegametestserveruserdev",
+        "--gameDir",
+        ".",
+        "--fml.forgeVersion",
+        "47.4.16",
+        "--fml.mcVersion",
+        "1.20.1",
+        "--fml.forgeGroup",
+        "net.minecraftforge",
+        "--fml.mcpVersion",
+        "20230612.114412"
+      ],
+      "jvmArgs": [
+        "-Djava.net.preferIPv6Addresses\u003dsystem",
+        "-p",
+        "{modules}",
+        "--add-modules",
+        "ALL-MODULE-PATH",
+        "--add-opens",
+        "java.base/java.util.jar\u003dcpw.mods.securejarhandler",
+        "--add-opens",
+        "java.base/java.lang.invoke\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "java.base/sun.security.util\u003dcpw.mods.securejarhandler",
+        "--add-exports",
+        "jdk.naming.dns/com.sun.jndi.dns\u003djava.naming"
+      ],
+      "client": false,
+      "buildAllProjects": false,
+      "env": {
+        "MOD_CLASSES": "{source_roots}",
+        "MCP_MAPPINGS": "{mcp_mappings}"
+      },
+      "props": {
+        "legacyClassPath.file": "{minecraft_classpath_file}",
+        "ignoreList": "bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,JarJarFileSystems,client-extra,fmlcore,javafmllanguage,lowcodelanguage,mclanguage,forge-",
+        "mergeModules": "jna-5.10.0.jar,jna-platform-5.10.0.jar"
+      }
+    }
+  },
+  "spec": 2
+}

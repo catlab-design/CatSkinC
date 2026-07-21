@@ -2,6 +2,33 @@
 
 All notable changes to this project should be documented in this file.
 
+## [3.1.1] - 2026-07-21
+
+### Added
+
+- Added pending selections cache to eliminate the select-fetch race condition on skin upload.
+- Added fast-retry mechanism (2s) when server returns no skin, reducing wait from 5-15s to 2s.
+- Added `clearTexture()` method to SkinManagerClient for proper skin clearing on SSE clear events.
+- Added circuit breaker awareness to SSE reconnection loop.
+- Added exponential backoff with jitter to SSE reconnection attempts.
+
+### Changed
+
+- **Fixed skin applied delay (5-10s)**: Chained `selectSkin().thenRun(refresh)` in upload flow so server selection completes before fetch. Moved `LAST_CHECK` update to only happen on actual texture update (not failed fetches). Reduced polling interval from 15s to 5s.
+- **Fixed SSE clear-skin bug**: When server returns no skin URL, cached textures are now properly cleared so player reverts to default Minecraft skin.
+- **Fixed SSE tight reconnect loop**: Added delay on stream-close path (was reconnecting instantly).
+- **Fixed non-atomic circuit breaker**: Changed `consecutiveFailures` from `volatile int` to `AtomicInteger`.
+- **Fixed texture memory leak**: Old textures are now always destroyed on refresh (previously skipped when ID was unchanged).
+
+### Fixed
+
+- Fixed SSE clear events not propagating: clear events now call `clearTexture()` instead of `forceFetch()`.
+- Fixed old skin flashing: pending selections cache ensures fetch returns correct skin immediately after upload.
+- Fixed texture self-destroy race: added `!equals` guard to prevent destroying identical texture IDs.
+- Fixed SSE thread leak: `sseConnection` field properly closed in `stopSse()`.
+- Fixed selectSkin missing forceRefresh retry: retries session token with forceRefresh=true on null.
+- Fixed NativeImage leak in `refreshPreviewTexture()`: NativeImage now properly closed on exception paths.
+
 ## [3.1.0] - 2026-06-12
 
 ### Added
