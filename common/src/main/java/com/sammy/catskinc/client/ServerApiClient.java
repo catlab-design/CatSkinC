@@ -714,7 +714,8 @@ public final class ServerApiClient {
                 RuntimeConfig cfg = runtimeConfig();
                 String requestId = newRequestId();
                 ModLog.trace("Downloading texture from {}", urlOrPath);
-                connection = open("GET", urlOrPath, null, SHA256_EMPTY_HEX, requestId, false);
+                String downloadUrl = signDownloadUrl(urlOrPath, cfg);
+                connection = open("GET", downloadUrl, null, SHA256_EMPTY_HEX, requestId, false);
                 int code = responseCode(connection, requestId);
                 if (code == 426) {
                     notifyClientOutdated();
@@ -759,6 +760,37 @@ public final class ServerApiClient {
                 disconnectQuietly(connection);
             }
         }, EXECUTOR);
+    }
+
+    private static String signDownloadUrl(String urlOrPath, RuntimeConfig cfg) {
+        if (cfg.requestSigningKey == null || cfg.requestSigningKey.isBlank()) {
+            return urlOrPath;
+        }
+        try {
+            URL url = parseUrl(urlOrPath);
+            String path = url.getPath();
+            String relativePath = path;
+            if (relativePath.startsWith("/public/")) {
+                relativePath = relativePath.substring(8);
+            } else if (relativePath.startsWith("public/")) {
+                relativePath = relativePath.substring(7);
+            } else {
+                return urlOrPath;
+            }
+            if (relativePath.isEmpty()) {
+                return urlOrPath;
+            }
+            long exp = System.currentTimeMillis() / 1000L + 300L;
+            String payload = relativePath + "\n" + exp;
+            String signature = signRequest(payload, cfg.requestSigningKey);
+            String separator = url.getQuery() == null ? "?" : "&";
+            String result = urlOrPath + separator + "exp=" + exp + "&sig=" + signature;
+            ModLog.trace("Signed download URL: exp={} path={}", exp, relativePath);
+            return result;
+        } catch (Exception exception) {
+            ModLog.warn("Failed to sign download URL, falling back to unsigned: {}", exception.getMessage());
+            return urlOrPath;
+        }
     }
 
     public static CompletableFuture<DynamicTexture> downloadTextureAsync(String urlOrPath) {

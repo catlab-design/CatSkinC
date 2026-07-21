@@ -17,6 +17,7 @@ All notable changes to this project should be documented in this file.
   - **Circuit breaker in SSE**: SSE checks `circuitOpenUntilMs` before connecting, eliminating useless retries during outage.
   - **AtomicInteger**: `consecutiveFailures` switched to `AtomicInteger` for correct failure counting.
   - **Always destroy old textures**: removed identity check gate on texture release to prevent GPU memory leaks.
+- **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
 
 ## [3.1.0] - 2026-06-12
 
