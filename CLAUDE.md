@@ -2,7 +2,7 @@
 
 Cloud-based skin upload, skin history, and live skin sync mod for Minecraft 1.20.1.
 
-- **Version:** 3.1.0
+- **Version:** 3.1.1
 - **License:** GPL-3.0-or-later
 - **Authors:** Team CatLab Design (originally Q Team Studio)
 
