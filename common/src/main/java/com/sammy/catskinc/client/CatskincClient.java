@@ -138,7 +138,7 @@ public final class CatskincClient {
         if (devDiagnostics) {
             ModLog.debug("Dev diagnostics enabled (debugger/flag detected)");
         }
-        SkinManagerClient.setRefreshIntervalMs(15 * 1000L);
+        SkinManagerClient.setRefreshIntervalMs(5 * 1000L);
         VoiceActivityTracker.configure(180, 420);
     }
 
@@ -185,7 +185,13 @@ public final class CatskincClient {
                     if (event.slim != null) {
                         SkinManagerClient.setSlim(event.uuid, event.slim);
                     }
-                    SkinManagerClient.forceFetch(event.uuid);
+                    // Detect clear events: no URL/id means skin was removed on server
+                    boolean isClearEvent = event.url == null || event.url.isBlank() || event.id == null || event.id.isBlank();
+                    if (isClearEvent) {
+                        SkinManagerClient.clearTexture(event.uuid);
+                    } else {
+                        SkinManagerClient.forceFetch(event.uuid);
+                    }
                 });
             });
 

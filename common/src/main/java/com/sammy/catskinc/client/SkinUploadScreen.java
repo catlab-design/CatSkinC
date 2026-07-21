@@ -833,10 +833,14 @@ extends Screen {
                     }
                     ModSounds.play(ModSounds.UI_COMPLETE);
                     if (minecraftClient.player != null) {
+                        java.util.UUID uuid = minecraftClient.player.getUuid();
                         SkinUploadScreen.this.applyImmediateLocalSkinSelection(minecraftClient, bl);
-                        ServerApiClient.selectSkin(minecraftClient.player.getUuid(), string, bl);
-                        SkinManagerClient.setSlim(minecraftClient.player.getUuid(), bl);
-                        SkinManagerClient.refresh(minecraftClient.player.getUuid());
+                        SkinManagerClient.setSlim(uuid, bl);
+                        // Chain select BEFORE refresh to eliminate the select-fetch race.
+                        // This ensures the server has processed the selection before we fetch it.
+                        ServerApiClient.selectSkin(uuid, string, bl).thenRun(() -> {
+                            SkinManagerClient.refresh(uuid);
+                        });
                     }
                 });
             }

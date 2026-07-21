@@ -26,7 +26,9 @@ public final class SkinManagerClient {
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
 
-    private static volatile long refreshIntervalMs = 15_000L;
+    private static volatile long refreshIntervalMs = 5_000L;
+    private static final long FAST_RETRY_MS = 2_000L;
+    private static final Map<UUID, Long> FAST_RETRY_SCHEDULED = new ConcurrentHashMap<>();
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread thread = new Thread(r, "CatSkinC-SkinManager");
@@ -77,6 +79,23 @@ public final class SkinManagerClient {
         }
     }
 
+    public static void clearTexture(UUID uuid) {
+        if (uuid == null) {
+            return;
+        }
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            client.execute(() -> destroyTextures(client, uuid));
+        } else {
+            BASE_CACHE.remove(uuid);
+            TALKING_CACHE.remove(uuid);
+        }
+        LAST_SKIN_URL.remove(uuid);
+        LAST_MOUTH_OPEN_URL.remove(uuid);
+        LAST_CHECK.remove(uuid);
+        ModLog.debug("Skin texture cleared for {}", uuid);
+    }
+
     public static void forceFetch(UUID uuid) {
         if (uuid == null) {
             return;
@@ -113,9 +132,18 @@ public final class SkinManagerClient {
         CompletableFuture<ServerApiClient.SelectedSkin> selected = ServerApiClient.fetchSelectedAsync(uuid);
         selected.thenCompose(skin -> {
             if (skin == null || skin.url() == null || skin.url().isBlank()) {
-                ModLog.trace("No remote skin available for {} (keeping current texture)", uuid);
+                ModLog.trace("No remote skin available for {}, clearing cached texture", uuid);
                 LAST_SKIN_URL.remove(uuid);
                 LAST_MOUTH_OPEN_URL.remove(uuid);
+                SLIM.remove(uuid);
+                // Clear cached textures so player reverts to default skin
+                MinecraftClient client = MinecraftClient.getInstance();
+                if (client != null) {
+                    client.execute(() -> destroyTextures(client, uuid));
+                } else {
+                    BASE_CACHE.remove(uuid);
+                    TALKING_CACHE.remove(uuid);
+                }
                 return CompletableFuture.completedFuture(null);
             }
 
@@ -145,10 +173,16 @@ public final class SkinManagerClient {
                             mouthOpenRequested));
         }).whenCompleteAsync((images, throwable) -> {
             IN_FLIGHT.remove(uuid);
-            LAST_CHECK.put(uuid, System.currentTimeMillis());
             if (throwable != null) {
                 ModLog.error("Skin apply failed for uuid=" + uuid, throwable);
                 return;
+            }
+            // Only update LAST_CHECK when there was an actual update to avoid poll blackout
+            if (images != null) {
+                LAST_CHECK.put(uuid, System.currentTimeMillis());
+            } else if (!LAST_SKIN_URL.containsKey(uuid)) {
+                // No skin cached at all: schedule fast-retry in 2s
+                scheduleFastRetry(uuid);
             }
             if (images == null) {
                 ModLog.trace("No texture update for {}", uuid);
@@ -188,7 +222,7 @@ public final class SkinManagerClient {
                     baseTexture.setFilter(false, false);
                     textureManager.registerTexture(baseId, baseTexture);
                     BASE_CACHE.put(uuid, baseId);
-                    if (oldBaseId != null && !oldBaseId.equals(baseId)) {
+                    if (oldBaseId != null) {
                         textureManager.destroyTexture(oldBaseId);
                     }
 
@@ -201,7 +235,7 @@ public final class SkinManagerClient {
                         textureManager.registerTexture(talkingId, talkingTexture);
                         TALKING_CACHE.put(uuid, talkingId);
                     }
-                    if (oldTalkingId != null && !oldTalkingId.equals(talkingId)) {
+                    if (oldTalkingId != null) {
                         textureManager.destroyTexture(oldTalkingId);
                     }
 
@@ -262,6 +296,7 @@ public final class SkinManagerClient {
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
         IN_FLIGHT.clear();
+        FAST_RETRY_SCHEDULED.clear();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
 
@@ -354,6 +389,20 @@ public final class SkinManagerClient {
         }
     }
 
+    private static void scheduleFastRetry(UUID uuid) {
+        if (uuid == null || FAST_RETRY_SCHEDULED.containsKey(uuid)) return;
+        FAST_RETRY_SCHEDULED.put(uuid, System.currentTimeMillis());
+        EXECUTOR.submit(() -> {
+            try {
+                Thread.sleep(FAST_RETRY_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            FAST_RETRY_SCHEDULED.remove(uuid);
+            fetchAndApplyFor(uuid);
+        });
+    }
+
     private static void closeQuietly(NativeImage image) {
         if (image == null) {
             return;
@@ -377,7 +426,8 @@ public final class SkinManagerClient {
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
         IN_FLIGHT.clear();
-        refreshIntervalMs = 15_000L;
+        refreshIntervalMs = 5_000L;
+        FAST_RETRY_SCHEDULED.clear();
     }
 
     private record DownloadedImages(
