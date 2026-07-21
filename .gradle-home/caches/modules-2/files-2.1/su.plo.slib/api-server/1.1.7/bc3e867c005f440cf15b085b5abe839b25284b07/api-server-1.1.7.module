@@ -1,0 +1,127 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "su.plo.slib",
+    "module": "api-server",
+    "version": "1.1.7",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.12"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "files": [
+        {
+          "name": "api-server-1.1.7.jar",
+          "url": "api-server-1.1.7.jar",
+          "size": 15613,
+          "sha512": "933bc8f868d1f95d1e838614e03c0b40a65d02a08086cdf3b136ac6793cdaaa488328f30ff04f4f4d22b08864a7ead7bedf701b5cc7d6a289316f6fce3a1ed45",
+          "sha256": "070f2a9e78192ad6d588b339b387a3202efa6e75a11dabba17c8f072eedeaa8e",
+          "sha1": "482dea9123d0ae00d4e0ca2522d69717f85c7936",
+          "md5": "4f1cc5803ddc7bbb3493072c8c1d99dc"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8"
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-jdk8",
+          "version": {
+            "requires": "1.7.3"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "33.3.1-jre"
+          }
+        },
+        {
+          "group": "su.plo.slib",
+          "module": "api-common",
+          "version": {
+            "requires": "1.1.7"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "2.0.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "api-server-1.1.7.jar",
+          "url": "api-server-1.1.7.jar",
+          "size": 15613,
+          "sha512": "933bc8f868d1f95d1e838614e03c0b40a65d02a08086cdf3b136ac6793cdaaa488328f30ff04f4f4d22b08864a7ead7bedf701b5cc7d6a289316f6fce3a1ed45",
+          "sha256": "070f2a9e78192ad6d588b339b387a3202efa6e75a11dabba17c8f072eedeaa8e",
+          "sha1": "482dea9123d0ae00d4e0ca2522d69717f85c7936",
+          "md5": "4f1cc5803ddc7bbb3493072c8c1d99dc"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "api-server-1.1.7-sources.jar",
+          "url": "api-server-1.1.7-sources.jar",
+          "size": 9011,
+          "sha512": "f5aa6f7c1546b40d54116923c44136784ccff6dbfadd76ee6ccfa1eee3ef7bad96c3acb4cdf39c6618562de876dc16d3865c4d8c9ee938df08756cb72a0f808c",
+          "sha256": "74a4d3f2b5816b9ae9609c928d29ee45389fa4b9910c5e81f2a697a37a4d1e85",
+          "sha1": "e162f215ff977ecc6275b0de061ca54a214c272f",
+          "md5": "159291f3b62cc0363b3e01752ddfc2d3"
+        }
+      ]
+    }
+  ]
+}

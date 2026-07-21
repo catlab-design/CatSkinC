@@ -1,0 +1,234 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "su.plo.voice.api",
+    "module": "client",
+    "version": "2.1.8",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.3"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "org.projectlombok",
+          "module": "lombok",
+          "version": {
+            "requires": "1.18.32"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "33.3.1-jre"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.10.1"
+          }
+        },
+        {
+          "group": "it.unimi.dsi",
+          "module": "fastutil",
+          "version": {
+            "requires": "8.5.18"
+          }
+        },
+        {
+          "group": "su.plo.config",
+          "module": "config",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "su.plo.voice",
+          "module": "protocol",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.voice.api",
+          "module": "common",
+          "version": {
+            "requires": "2.1.8"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "client-2.1.8.jar",
+          "url": "client-2.1.8.jar",
+          "size": 98608,
+          "sha512": "de7f51a19c7612e036762e654a4667cf2baf7e036154c8c2c1ef6738bfd535601afe5c1855810d8a9d3c95e6d8498074ba2a1be6dd8983f1760a50f49bd089d5",
+          "sha256": "862fb6e9cf39680d0c5a28e7947b9b8d2b50032a418f943cee26c3a47820e906",
+          "sha1": "00305ff3b1ba0844681ce88a13c2ba731fb63dd6",
+          "md5": "44c5bd9dbab22bad065fba0995b386af"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8"
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-jdk8",
+          "version": {
+            "requires": "1.7.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-json",
+          "version": {
+            "requires": "1.5.1"
+          }
+        },
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "org.projectlombok",
+          "module": "lombok",
+          "version": {
+            "requires": "1.18.32"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "33.3.1-jre"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.10.1"
+          }
+        },
+        {
+          "group": "it.unimi.dsi",
+          "module": "fastutil",
+          "version": {
+            "requires": "8.5.18"
+          }
+        },
+        {
+          "group": "su.plo.config",
+          "module": "config",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "su.plo.voice",
+          "module": "protocol",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.voice.api",
+          "module": "common",
+          "version": {
+            "requires": "2.1.8"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "2.0.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "client-2.1.8.jar",
+          "url": "client-2.1.8.jar",
+          "size": 98608,
+          "sha512": "de7f51a19c7612e036762e654a4667cf2baf7e036154c8c2c1ef6738bfd535601afe5c1855810d8a9d3c95e6d8498074ba2a1be6dd8983f1760a50f49bd089d5",
+          "sha256": "862fb6e9cf39680d0c5a28e7947b9b8d2b50032a418f943cee26c3a47820e906",
+          "sha1": "00305ff3b1ba0844681ce88a13c2ba731fb63dd6",
+          "md5": "44c5bd9dbab22bad065fba0995b386af"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "client-2.1.8-sources.jar",
+          "url": "client-2.1.8-sources.jar",
+          "size": 58677,
+          "sha512": "6a1a7ae100055ce661fc429836b0be9e8e0f684ecd7f98a043353318274290bc23450240bfee8138dc4af0493ba75a56c65cfaac68e4f48d7fcbe341d7a01825",
+          "sha256": "08284260930da0dc4540c441dce28dbad3950930afa0cb1023624406b9c400c9",
+          "sha1": "337d9270e058a2eec2737d509e2a1b94e40877b3",
+          "md5": "f9dd3363b4947a0c600a2c44857875b4"
+        }
+      ]
+    }
+  ]
+}

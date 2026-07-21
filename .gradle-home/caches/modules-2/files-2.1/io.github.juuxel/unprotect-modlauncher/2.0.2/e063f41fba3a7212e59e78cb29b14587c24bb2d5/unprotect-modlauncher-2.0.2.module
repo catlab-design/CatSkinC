@@ -1,0 +1,109 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "io.github.juuxel",
+    "module": "unprotect-modlauncher",
+    "version": "2.0.2",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.3"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "unprotect-modlauncher-2.0.2.jar",
+          "url": "unprotect-modlauncher-2.0.2.jar",
+          "size": 8147,
+          "sha512": "7cc3f2f0ff34a86befbd0076335ff57faa7bc019efb7b570fd0c4da93db9e490d5340cdcb9b1ae9cefb144d4a4aa9d6587ae045767009434fa067c1186e72f17",
+          "sha256": "8987f29edaaeb8826eaf482cf47acbf287d828ec57fa12503aa8cec434118392",
+          "sha1": "20d36922d7bb84c3185c213e935150584d6c7166",
+          "md5": "6aae227269377998f658ebc3725a228c"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "io.github.juuxel",
+          "module": "unprotect",
+          "version": {
+            "requires": "2.0.2"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "unprotect-modlauncher-2.0.2.jar",
+          "url": "unprotect-modlauncher-2.0.2.jar",
+          "size": 8147,
+          "sha512": "7cc3f2f0ff34a86befbd0076335ff57faa7bc019efb7b570fd0c4da93db9e490d5340cdcb9b1ae9cefb144d4a4aa9d6587ae045767009434fa067c1186e72f17",
+          "sha256": "8987f29edaaeb8826eaf482cf47acbf287d828ec57fa12503aa8cec434118392",
+          "sha1": "20d36922d7bb84c3185c213e935150584d6c7166",
+          "md5": "6aae227269377998f658ebc3725a228c"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "unprotect-modlauncher-2.0.2-sources.jar",
+          "url": "unprotect-modlauncher-2.0.2-sources.jar",
+          "size": 2895,
+          "sha512": "8e175572d37a89f80a4ec63411479d487cf4d076c0109a5bcab400de3a8a97cf4e23582b7c4a8360c5fa629e7a4d476e2fc2439ff7792efcc3a58499502dbec2",
+          "sha256": "9491b9d219c7756cbcd97e9a75749888d11ada477556da6636cf1ebbcc5cddfa",
+          "sha1": "ffdb0f777307c602cc9618716ad1c8f328769d2d",
+          "md5": "2db6950c784883298c0acb23a7b4d4bb"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "unprotect-modlauncher-2.0.2-javadoc.jar",
+          "url": "unprotect-modlauncher-2.0.2-javadoc.jar",
+          "size": 87451,
+          "sha512": "2c4ad41098cba9e90f0c4fbaf96654fc22c744940b0ba41656e74b4820e2160cf8ecb4151e9bb9a22dd7074f747fbbadfe735538ca6a8b9ec2252f4f952e25fc",
+          "sha256": "e9aa6fd7d2d58f3a5a44ea5187e626001df4dd8acdd2786c981fa77f7da0bf3d",
+          "sha1": "03d9c3fd377066bc933bf167289d224381f1cdec",
+          "md5": "0622dfb7b12fc7a9c495de94867e2080"
+        }
+      ]
+    }
+  ]
+}

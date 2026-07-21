@@ -1,0 +1,211 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.github.johnrengelman",
+    "module": "shadow",
+    "version": "8.1.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.0.2"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "shadow-8.1.1.jar",
+          "url": "shadow-8.1.1.jar",
+          "size": 353537,
+          "sha512": "7f490267b3d93f86b1cd6727643ba6c454d50d0a89624e5df30fe855612fab0632c3c029bfff76dfd7bb42f471601ebe7b4b2e3a181890b4e673bfb2af30de9e",
+          "sha256": "084197555590a53bb21b59508a3330559f536ddb448eafd1ec675f5462036fcf",
+          "sha1": "558cee65c3a1b0ac40ecc91ef1f50a14fb7498b9",
+          "md5": "6ea9d2d82b534e08e692a505d2b7c373"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.jdom",
+          "module": "jdom2",
+          "version": {
+            "requires": "2.0.6.1"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm",
+          "version": {
+            "requires": "9.4"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm-commons",
+          "version": {
+            "requires": "9.4"
+          }
+        },
+        {
+          "group": "commons-io",
+          "module": "commons-io",
+          "version": {
+            "requires": "2.11.0"
+          }
+        },
+        {
+          "group": "org.apache.ant",
+          "module": "ant",
+          "version": {
+            "requires": "1.10.13"
+          }
+        },
+        {
+          "group": "org.codehaus.plexus",
+          "module": "plexus-utils",
+          "version": {
+            "requires": "3.5.1"
+          }
+        },
+        {
+          "group": "org.apache.logging.log4j",
+          "module": "log4j-core",
+          "version": {
+            "requires": "2.20.0"
+          }
+        },
+        {
+          "group": "org.vafer",
+          "module": "jdependency",
+          "version": {
+            "requires": "2.8.0"
+          },
+          "excludes": [
+            {
+              "group": "org.ow2.asm",
+              "module": "*"
+            }
+          ]
+        }
+      ],
+      "files": [
+        {
+          "name": "shadow-8.1.1.jar",
+          "url": "shadow-8.1.1.jar",
+          "size": 353537,
+          "sha512": "7f490267b3d93f86b1cd6727643ba6c454d50d0a89624e5df30fe855612fab0632c3c029bfff76dfd7bb42f471601ebe7b4b2e3a181890b4e673bfb2af30de9e",
+          "sha256": "084197555590a53bb21b59508a3330559f536ddb448eafd1ec675f5462036fcf",
+          "sha1": "558cee65c3a1b0ac40ecc91ef1f50a14fb7498b9",
+          "md5": "6ea9d2d82b534e08e692a505d2b7c373"
+        }
+      ]
+    },
+    {
+      "name": "shadowRuntimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "shadowed",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy-backports-compat23",
+          "version": {
+            "requires": "3.0.8"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "shadow-8.1.1-all.jar",
+          "url": "shadow-8.1.1-all.jar",
+          "size": 6259202,
+          "sha512": "d199601b91955277bca74bfe055006ead67ef25aba5a9f2832d6b84f0c1322d01ccf0fd8eb724d57943a7b6222bf767d97fd7cb80646f6e7cad257adf63b01bf",
+          "sha256": "fa6be7ced2cd4f4900aa30106af5560da9060902a6312044124ee83529f73772",
+          "sha1": "21a5d131db1a0b67d9dd7c3df126b2f4a0edfedc",
+          "md5": "8130c1e2d62fa9f6e9503a8a99ded45e"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "shadow-8.1.1-javadoc.jar",
+          "url": "shadow-8.1.1-javadoc.jar",
+          "size": 401875,
+          "sha512": "b9362a6c85caf1b374cc79244b7cf903368b93f6858feef6b8f92a5853887870273976a89bde5db917f1d0f8aead7ce1fa1364a0542a902197c67919508516b4",
+          "sha256": "69640591b01931dcbc4b53c20f931425bc07dcfd7d1028437040b4721fb06c45",
+          "sha1": "a18bb04ea259ed844f7d96db07f9fc6b242e219d",
+          "md5": "9d1023bfdc4e2f269970e7dde608023c"
+        },
+        {
+          "name": "shadow-8.1.1-javadoc.jar",
+          "url": "shadow-8.1.1-javadoc.jar",
+          "size": 401875,
+          "sha512": "b9362a6c85caf1b374cc79244b7cf903368b93f6858feef6b8f92a5853887870273976a89bde5db917f1d0f8aead7ce1fa1364a0542a902197c67919508516b4",
+          "sha256": "69640591b01931dcbc4b53c20f931425bc07dcfd7d1028437040b4721fb06c45",
+          "sha1": "a18bb04ea259ed844f7d96db07f9fc6b242e219d",
+          "md5": "9d1023bfdc4e2f269970e7dde608023c"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "shadow-8.1.1-sources.jar",
+          "url": "shadow-8.1.1-sources.jar",
+          "size": 63857,
+          "sha512": "f5660da7407e6d304a6d516ca3de8466e7f8feac7b387da996672c7be7a94c3aaff16f357d1046d4fc04e831e143a178e7424a28d2455501feda43bfa16f1ead",
+          "sha256": "93820bd302403c298b49f376f7665189d91b0276771c2ab409cfa7de45cba333",
+          "sha1": "3a656f2bf83210ea20aec58cb6a52c0d4dbd1718",
+          "md5": "c8241ed9fa97304e3d9e4f4038ac0f9c"
+        },
+        {
+          "name": "shadow-8.1.1-sources.jar",
+          "url": "shadow-8.1.1-sources.jar",
+          "size": 63857,
+          "sha512": "f5660da7407e6d304a6d516ca3de8466e7f8feac7b387da996672c7be7a94c3aaff16f357d1046d4fc04e831e143a178e7424a28d2455501feda43bfa16f1ead",
+          "sha256": "93820bd302403c298b49f376f7665189d91b0276771c2ab409cfa7de45cba333",
+          "sha1": "3a656f2bf83210ea20aec58cb6a52c0d4dbd1718",
+          "md5": "c8241ed9fa97304e3d9e4f4038ac0f9c"
+        }
+      ]
+    }
+  ]
+}

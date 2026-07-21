@@ -1,0 +1,137 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "net.neoforged.installertools",
+    "module": "binarypatcher",
+    "version": "2.1.2",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.4"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "binarypatcher-2.1.2.jar",
+          "url": "binarypatcher-2.1.2.jar",
+          "size": 23074,
+          "sha512": "4db2ac645e1356503b15511f3e67f2802125efc01ccc137732d210a569cca43e36797a00573e1e5c9fc5e3297dc74b697018d485683848efa5e1ae97e2f1e5e5",
+          "sha256": "4fae71426631ce9972358cea5d40f9f3ed1805bb212f3be6c05efd071203a5a7",
+          "sha1": "eab75026876e127d35d41a6dc3a91c839070e2e0",
+          "md5": "23fcfef9a7bf31b8ec3f4557045892a1"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "net.neoforged",
+          "module": "srgutils",
+          "version": {
+            "requires": "1.0.0"
+          }
+        },
+        {
+          "group": "net.sf.jopt-simple",
+          "module": "jopt-simple",
+          "version": {
+            "requires": "5.0.4"
+          }
+        },
+        {
+          "group": "com.github.jponge",
+          "module": "lzma-java",
+          "version": {
+            "requires": "1.3"
+          }
+        },
+        {
+          "group": "com.nothome",
+          "module": "javaxdelta",
+          "version": {
+            "requires": "2.0.1"
+          }
+        },
+        {
+          "group": "net.neoforged.installertools",
+          "module": "cli-utils",
+          "version": {
+            "requires": "2.1.2"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "binarypatcher-2.1.2.jar",
+          "url": "binarypatcher-2.1.2.jar",
+          "size": 23074,
+          "sha512": "4db2ac645e1356503b15511f3e67f2802125efc01ccc137732d210a569cca43e36797a00573e1e5c9fc5e3297dc74b697018d485683848efa5e1ae97e2f1e5e5",
+          "sha256": "4fae71426631ce9972358cea5d40f9f3ed1805bb212f3be6c05efd071203a5a7",
+          "sha1": "eab75026876e127d35d41a6dc3a91c839070e2e0",
+          "md5": "23fcfef9a7bf31b8ec3f4557045892a1"
+        }
+      ]
+    },
+    {
+      "name": "shadowRuntimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "shadowed",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "binarypatcher-2.1.2-fatjar.jar",
+          "url": "binarypatcher-2.1.2-fatjar.jar",
+          "size": 624217,
+          "sha512": "b9591b93fe42870f818ab4e0482228e395f26d0fdc20d46ba1097219a416836f86bae3349e3f49cf70ba3a8c695f5a65e195e2dd1d0022965884d69f3a77e58e",
+          "sha256": "9d73d565b775c8ec9da83da6d2a25454c7aad95eba22f64def9261f214cc49ba",
+          "sha1": "759b63ef393ed80418ec1ea4d233cd6152d02637",
+          "md5": "a471b786db3abba1270c5e7e776733d5"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "binarypatcher-2.1.2-sources.jar",
+          "url": "binarypatcher-2.1.2-sources.jar",
+          "size": 9894,
+          "sha512": "deee772b96a3a58bb025142ff062cf29836da07deaa315179771dcb25d807e408d9d4a1809fd6b99d3437ae4fb59c0cbbed67f7bc7163a7c2af2a03ea8057c92",
+          "sha256": "9a232a7e8a09c72bac11b9e9560f4ea48b5b31530da3c0db7229bd6d00aedb5d",
+          "sha1": "533c9542e6c37169149a92352c3973cb8c34781a",
+          "md5": "cfa3f15899ecd359de764a6b9eda33cc"
+        }
+      ]
+    }
+  ]
+}

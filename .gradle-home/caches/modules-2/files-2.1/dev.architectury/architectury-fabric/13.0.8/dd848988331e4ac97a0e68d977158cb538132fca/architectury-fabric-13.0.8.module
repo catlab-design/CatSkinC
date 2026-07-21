@@ -1,0 +1,96 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "dev.architectury",
+    "module": "architectury-fabric",
+    "version": "13.0.8",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.6"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "architectury-fabric-13.0.8.jar",
+          "url": "architectury-fabric-13.0.8.jar",
+          "size": 609107,
+          "sha512": "bd304bc45e45ee02d1e70b2905140bf6eac8c180f8a6eba5cab5812a0c98e51b866b00b8dd39d39cfeae72e7f6d5462ef8f103f510ac9c7bafb4bd1d117d8c26",
+          "sha256": "0d0f290ecbb5470f989d3c7a4539c04145cb1ae23d6b117e6b0bc94f7620214d",
+          "sha1": "a22b4c8317320bc7916341f24fcef05cfbc5b76e",
+          "md5": "b190f45bd20250e9dff6183ca714fc76"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "net.fabricmc",
+          "module": "fabric-loader",
+          "version": {
+            "requires": "0.15.11"
+          }
+        },
+        {
+          "group": "net.fabricmc.fabric-api",
+          "module": "fabric-api",
+          "version": {
+            "requires": "0.100.0+1.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "architectury-fabric-13.0.8.jar",
+          "url": "architectury-fabric-13.0.8.jar",
+          "size": 609107,
+          "sha512": "bd304bc45e45ee02d1e70b2905140bf6eac8c180f8a6eba5cab5812a0c98e51b866b00b8dd39d39cfeae72e7f6d5462ef8f103f510ac9c7bafb4bd1d117d8c26",
+          "sha256": "0d0f290ecbb5470f989d3c7a4539c04145cb1ae23d6b117e6b0bc94f7620214d",
+          "sha1": "a22b4c8317320bc7916341f24fcef05cfbc5b76e",
+          "md5": "b190f45bd20250e9dff6183ca714fc76"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "architectury-fabric-13.0.8-sources.jar",
+          "url": "architectury-fabric-13.0.8-sources.jar",
+          "size": 481736,
+          "sha512": "2c37d649461e0f183002231c8b4cd0054d0fa7ce3eb7e2c26a32b702acecec882d013000f9a12c993a991c2949dde89f25aefa504163a1a2d730168baa2d56df",
+          "sha256": "773df2d83cfec20f7cf72a619b620dc681de35c9c2e9cf80395b62f17e77b2f5",
+          "sha1": "05800b53d5b41564d6255c0e7c054cb3479d97be",
+          "md5": "7b657609f639322a543ec1ca33509c2e"
+        }
+      ]
+    }
+  ]
+}

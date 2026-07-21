@@ -1048,27 +1048,34 @@ extends Screen {
         if (this.selectedFile == null) {
             return;
         }
+        NativeImage nativeImage = null;
+        NativeImage nativeImage3 = null;
         try (FileInputStream fileInputStream = new FileInputStream(this.selectedFile);){
-            NativeImage nativeImage = NativeImage.read((InputStream)fileInputStream);
+            nativeImage = NativeImage.read((InputStream)fileInputStream);
             File file = this.selectedMouthOpenFile;
             NativeImage nativeImage2 = nativeImage;
             if (file != null) {
                 try (FileInputStream fileInputStream2 = new FileInputStream(file);){
-                    NativeImage nativeImage3 = NativeImage.read((InputStream)fileInputStream2);
+                    nativeImage3 = NativeImage.read((InputStream)fileInputStream2);
                     NativeImage nativeImage4 = this.createOverlayImage("preview", nativeImage, nativeImage3);
                     if (nativeImage4 != null && nativeImage4 != nativeImage) {
                         nativeImage.close();
+                        nativeImage = null;
                         nativeImage2 = nativeImage4;
                     }
                     nativeImage3.close();
+                    nativeImage3 = null;
                 }
             }
             this.previewTexture = new DynamicTexture(nativeImage2);
             this.previewTexture.setFilter(false, false);
             this.previewId = Identifiers.mod("preview/" + System.nanoTime());
             Minecraft.getInstance().getTextureManager().register(this.previewId, (AbstractTexture)this.previewTexture);
+            nativeImage = null;
         }
         catch (Exception exception) {
+            if (nativeImage != null) nativeImage.close();
+            if (nativeImage3 != null) nativeImage3.close();
             ModLog.error("Failed to rebuild preview texture", exception);
             SkinUploadScreen.toastError("toast.error.read_failed", new Object[0]);
             return;

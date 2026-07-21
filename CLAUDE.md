@@ -228,5 +228,8 @@ Same 13 tests as 1.20.1 plus 3 new:
 | 10 | **AtomicInteger** — `consecutiveFailures` is now atomic | Correct failure counting |
 | 11 | **Always destroy old textures** — removed identity check gate | Prevents GPU memory leak |
 | 12 | **SSE clear event handling** — distinguishes clear vs update events | Correct behavior on skin removal |
+| 13 | **SSE thread leak fix** — volatile `sseConnection` field, closed in `stopSse()` | Prevents connection leak on mod unload |
+| 14 | **selectSkin forceRefresh retry** — retries session token with forceRefresh=true on null | Recovers from stale tokens |
+| 15 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
 
 > **Last updated:** 2026-07-21

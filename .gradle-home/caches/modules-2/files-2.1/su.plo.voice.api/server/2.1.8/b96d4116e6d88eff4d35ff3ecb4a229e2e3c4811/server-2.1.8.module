@@ -1,0 +1,262 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "su.plo.voice.api",
+    "module": "server",
+    "version": "2.1.8",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.3"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "org.projectlombok",
+          "module": "lombok",
+          "version": {
+            "requires": "1.18.32"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "33.3.1-jre"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.10.1"
+          }
+        },
+        {
+          "group": "it.unimi.dsi",
+          "module": "fastutil",
+          "version": {
+            "requires": "8.5.18"
+          }
+        },
+        {
+          "group": "su.plo.config",
+          "module": "config",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "su.plo.voice",
+          "module": "protocol",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.voice.api",
+          "module": "common",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.voice.api",
+          "module": "server-proxy-common",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.slib",
+          "module": "api-server",
+          "version": {
+            "requires": "1.1.7"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "server-2.1.8.jar",
+          "url": "server-2.1.8.jar",
+          "size": 38085,
+          "sha512": "1ce467ea9ef0bb47aace9f8f0c54cadec3ed38a3603f7ccd2dddd03559cf804d6cf53ed4c51ce83f39c8238af803675bf0cb16b440a03ab1a201a2938dcdea52",
+          "sha256": "3f6b601e6d2fd7669049cbcefe2512a045330645015132fae6fa9716860c5f79",
+          "sha1": "1458098f0cb22c1d50c80cd6a37d8f06d7e8a0ff",
+          "md5": "64e31da2c3edd989d0e27da76e5c0dd7"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 8,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8"
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-core",
+          "version": {
+            "requires": "1.7.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-jdk8",
+          "version": {
+            "requires": "1.7.3"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-serialization-json",
+          "version": {
+            "requires": "1.5.1"
+          }
+        },
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "org.projectlombok",
+          "module": "lombok",
+          "version": {
+            "requires": "1.18.32"
+          }
+        },
+        {
+          "group": "com.google.guava",
+          "module": "guava",
+          "version": {
+            "requires": "33.3.1-jre"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.10.1"
+          }
+        },
+        {
+          "group": "it.unimi.dsi",
+          "module": "fastutil",
+          "version": {
+            "requires": "8.5.18"
+          }
+        },
+        {
+          "group": "su.plo.config",
+          "module": "config",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "su.plo.voice",
+          "module": "protocol",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.voice.api",
+          "module": "common",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.voice.api",
+          "module": "server-proxy-common",
+          "version": {
+            "requires": "2.1.8"
+          }
+        },
+        {
+          "group": "su.plo.slib",
+          "module": "api-server",
+          "version": {
+            "requires": "1.1.7"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk8",
+          "version": {
+            "requires": "2.0.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "server-2.1.8.jar",
+          "url": "server-2.1.8.jar",
+          "size": 38085,
+          "sha512": "1ce467ea9ef0bb47aace9f8f0c54cadec3ed38a3603f7ccd2dddd03559cf804d6cf53ed4c51ce83f39c8238af803675bf0cb16b440a03ab1a201a2938dcdea52",
+          "sha256": "3f6b601e6d2fd7669049cbcefe2512a045330645015132fae6fa9716860c5f79",
+          "sha1": "1458098f0cb22c1d50c80cd6a37d8f06d7e8a0ff",
+          "md5": "64e31da2c3edd989d0e27da76e5c0dd7"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "server-2.1.8-sources.jar",
+          "url": "server-2.1.8-sources.jar",
+          "size": 21463,
+          "sha512": "08b014cfd5544a27107721e2c201d378ae157ed620b51b518dd660458107ee8da846aa1b401d9ac64148bbd64555aa8978feca87b0e0efc0362480ef7b99439a",
+          "sha256": "8893d47d8700a294051016c23b9b5155c69aa323f2d561a86b8c1cb221d8040a",
+          "sha1": "36a83ce944ab4016ee4e758410250ab2c652029c",
+          "md5": "25b032b33e289d0f4c21df20d6e6a5cc"
+        }
+      ]
+    }
+  ]
+}
