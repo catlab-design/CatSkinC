@@ -29,6 +29,7 @@ All notable changes to this project should be documented in this file.
 - Fixed selectSkin missing forceRefresh retry: retries session token with forceRefresh=true on null.
 - Fixed NativeImage leak in `refreshPreviewTexture()`: NativeImage now properly closed on exception paths.
 - **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
+- **Replaced per-player TextureManager registrations with a single shared dynamic texture**: CatSkinC no longer registers per-player textures (`catskinc:remote/<uuid>`) with the vanilla `TextureManager`. Instead, downloaded `NativeImage` objects are cached in `SKIN_IMAGES` and pixel-copied into one shared `catskinc:dynamic/active` texture on each render frame. This prevents F3+S debug dumps from saving every player's skin to disk.
 
 ## [3.1.0] - 2026-06-12
 

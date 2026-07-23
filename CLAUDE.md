@@ -282,5 +282,6 @@ Enabled by default (`harden_build=true` in `gradle.properties`):
 | 15 | **selectSkin forceRefresh retry** — retries session token with forceRefresh=true on null | Recovers from stale tokens |
 | 16 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
 | 17 | **Signed download URLs** — `downloadImageAsync()` appends `?exp=&sig=` HMAC query params using `requestSigningKey` | Resolves HTTP 401 when server enforces signed downloads |
+| 18 | **Single shared dynamic texture** — removed per-player `TextureManager` registrations; uses one `catskinc:dynamic/active` texture with pixel swap per render | Prevents F3+S debug dump from saving every player's skin to disk |
 
-> **Last updated:** 2026-07-21
+> **Last updated:** 2026-07-23
