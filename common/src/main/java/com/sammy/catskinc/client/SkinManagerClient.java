@@ -16,14 +16,17 @@ import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
 
 public final class SkinManagerClient {
-    private static final Map<UUID, ResourceLocation> BASE_CACHE = new ConcurrentHashMap<>();
-    private static final Map<UUID, ResourceLocation> TALKING_CACHE = new ConcurrentHashMap<>();
+    private static final ResourceLocation SHARED_TEXTURE_ID = Identifiers.mod("dynamic/active");
+    private static DynamicTexture sharedTexture;
+    private static final Map<UUID, NativeImage> SKIN_IMAGES = new ConcurrentHashMap<>();
+    private static final Map<UUID, NativeImage> TALKING_IMAGES = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> SLIM = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> PREFERRED_SLIM = new ConcurrentHashMap<>();
     private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Long> LAST_CHECK = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
+    private static volatile UUID currentSkinUuid;
 
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
@@ -36,6 +39,23 @@ public final class SkinManagerClient {
     });
 
     private SkinManagerClient() {
+    }
+
+    public static void initialize(Minecraft client) {
+        if (sharedTexture != null) {
+            return;
+        }
+        client.execute(() -> {
+            NativeImage placeholder = new NativeImage(64, 64, true);
+            for (int y = 0; y < 64; y++) {
+                for (int x = 0; x < 64; x++) {
+                    placeholder.setPixelRGBA(x, y, 0);
+                }
+            }
+            sharedTexture = new DynamicTexture(placeholder);
+            sharedTexture.setFilter(false, false);
+            client.getTextureManager().register(SHARED_TEXTURE_ID, sharedTexture);
+        });
     }
 
     public static void setRefreshIntervalMs(long intervalMs) {
@@ -80,7 +100,7 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return;
         }
-        if (!BASE_CACHE.containsKey(uuid) || shouldPoll(uuid)) {
+        if (!SKIN_IMAGES.containsKey(uuid) || shouldPoll(uuid)) {
             fetchAndApplyFor(uuid);
         }
     }
@@ -97,13 +117,7 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return;
         }
-        Minecraft client = Minecraft.getInstance();
-        if (client != null) {
-            client.execute(() -> destroyTextures(client, uuid));
-        } else {
-            BASE_CACHE.remove(uuid);
-            TALKING_CACHE.remove(uuid);
-        }
+        destroyTextures(Minecraft.getInstance(), uuid);
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
         fetchAndApplyFor(uuid);
@@ -184,49 +198,21 @@ public final class SkinManagerClient {
                     ModLog.warn("Mouth-open texture missing after download for {}", uuid);
                 }
 
-                boolean skinConsumed = false;
-                boolean talkingConsumed = false;
-                try {
-                    TextureManager textureManager = client.getTextureManager();
-
-                    ResourceLocation baseId = idFor(uuid);
-                    ResourceLocation oldBaseId = BASE_CACHE.get(uuid);
-                    DynamicTexture baseTexture = new DynamicTexture(images.skinImage);
-                    skinConsumed = true;
-                    baseTexture.setFilter(false, false);
-                    textureManager.register(baseId, baseTexture);
-                    BASE_CACHE.put(uuid, baseId);
-                    if (oldBaseId != null && !oldBaseId.equals(baseId)) {
-                        textureManager.release(oldBaseId);
-                    }
-
-                    ResourceLocation talkingId = talkingIdFor(uuid);
-                    ResourceLocation oldTalkingId = TALKING_CACHE.remove(uuid);
-                    if (talkingImage != null) {
-                        DynamicTexture talkingTexture = new DynamicTexture(talkingImage);
-                        talkingConsumed = true;
-                        talkingTexture.setFilter(false, false);
-                        textureManager.register(talkingId, talkingTexture);
-                        TALKING_CACHE.put(uuid, talkingId);
-                    }
-                    if (oldTalkingId != null && !oldTalkingId.equals(talkingId)) {
-                        textureManager.release(oldTalkingId);
-                    }
-
-                    if (SkinOverrideStore.isManaged(uuid)) {
-                        SkinOverrideStore.clear(uuid);
-                    }
-
-                    ModLog.trace("Texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
-                } catch (Exception exception) {
-                    ModLog.error("Texture update failed for uuid=" + uuid, exception);
-                    if (!skinConsumed) {
-                        closeQuietly(images.skinImage);
-                    }
-                    if (!talkingConsumed) {
-                        closeQuietly(talkingImage);
-                    }
+                NativeImage previousSkin = SKIN_IMAGES.put(uuid, images.skinImage);
+                closeQuietly(previousSkin);
+                if (talkingImage != null) {
+                    NativeImage previousTalking = TALKING_IMAGES.put(uuid, talkingImage);
+                    closeQuietly(previousTalking);
+                } else {
+                    NativeImage removed = TALKING_IMAGES.remove(uuid);
+                    closeQuietly(removed);
                 }
+
+                if (SkinOverrideStore.isManaged(uuid)) {
+                    SkinOverrideStore.clear(uuid);
+                }
+
+                ModLog.trace("Texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
             });
         }, EXECUTOR);
     }
@@ -251,19 +237,15 @@ public final class SkinManagerClient {
     }
 
     public static void clearAll() {
-        int cacheSize = BASE_CACHE.size();
-        Minecraft client = Minecraft.getInstance();
-        if (client != null) {
-            TextureManager textureManager = client.getTextureManager();
-            for (ResourceLocation id : BASE_CACHE.values()) {
-                textureManager.release(id);
-            }
-            for (ResourceLocation id : TALKING_CACHE.values()) {
-                textureManager.release(id);
-            }
+        int cacheSize = SKIN_IMAGES.size();
+        for (NativeImage image : SKIN_IMAGES.values()) {
+            closeQuietly(image);
         }
-        BASE_CACHE.clear();
-        TALKING_CACHE.clear();
+        for (NativeImage image : TALKING_IMAGES.values()) {
+            closeQuietly(image);
+        }
+        SKIN_IMAGES.clear();
+        TALKING_IMAGES.clear();
         SLIM.clear();
         PREFERRED_SLIM.clear();
         LAST_CHECK.clear();
@@ -273,26 +255,54 @@ public final class SkinManagerClient {
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
 
-    private static ResourceLocation idFor(UUID uuid) {
-        return Identifiers.mod("remote/" + uuid.toString().replace("-", ""));
-    }
-
-    private static ResourceLocation talkingIdFor(UUID uuid) {
-        return Identifiers.mod("remote/" + uuid.toString().replace("-", "") + "/talking");
-    }
-
     private static ResourceLocation resolveRenderTexture(UUID uuid) {
-        ResourceLocation base = BASE_CACHE.get(uuid);
-        if (base == null) {
+        NativeImage image = SKIN_IMAGES.get(uuid);
+        if (image == null) {
             return null;
         }
         if (VoiceActivityTracker.isSpeaking(uuid)) {
-            ResourceLocation talking = TALKING_CACHE.get(uuid);
+            NativeImage talking = TALKING_IMAGES.get(uuid);
             if (talking != null) {
-                return talking;
+                image = talking;
             }
         }
-        return base;
+        if (!uuid.equals(currentSkinUuid)) {
+            swapTexture(image);
+            currentSkinUuid = uuid;
+        }
+        return SHARED_TEXTURE_ID;
+    }
+
+    private static void swapTexture(NativeImage source) {
+        if (sharedTexture == null || source == null) {
+            return;
+        }
+        NativeImage target = sharedTexture.getPixels();
+        if (target == null) {
+            return;
+        }
+        int sw = source.getWidth();
+        int sh = source.getHeight();
+        int tw = target.getWidth();
+        int th = target.getHeight();
+        int w = Math.min(sw, tw);
+        int h = Math.min(sh, th);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                target.setPixelRGBA(x, y, source.getPixelRGBA(x, y));
+            }
+        }
+        for (int y = h; y < th; y++) {
+            for (int x = 0; x < tw; x++) {
+                target.setPixelRGBA(x, y, 0);
+            }
+        }
+        for (int y = 0; y < h; y++) {
+            for (int x = w; x < tw; x++) {
+                target.setPixelRGBA(x, y, 0);
+            }
+        }
+        sharedTexture.upload();
     }
 
     private static boolean shouldPoll(UUID uuid) {
@@ -306,15 +316,13 @@ public final class SkinManagerClient {
     }
 
     private static void destroyTextures(Minecraft client, UUID uuid) {
-        TextureManager textureManager = client.getTextureManager();
-        ResourceLocation base = BASE_CACHE.remove(uuid);
-        if (base != null) {
-            textureManager.release(base);
+        if (uuid == null) {
+            return;
         }
-        ResourceLocation talking = TALKING_CACHE.remove(uuid);
-        if (talking != null) {
-            textureManager.release(talking);
-        }
+        NativeImage skin = SKIN_IMAGES.remove(uuid);
+        closeQuietly(skin);
+        NativeImage talking = TALKING_IMAGES.remove(uuid);
+        closeQuietly(talking);
     }
 
     private static NativeImage createOverlayImage(
@@ -377,8 +385,8 @@ public final class SkinManagerClient {
      * This method is package-private and should only be used in tests.
      */
     static void resetForTesting() {
-        BASE_CACHE.clear();
-        TALKING_CACHE.clear();
+        SKIN_IMAGES.clear();
+        TALKING_IMAGES.clear();
         SLIM.clear();
         PREFERRED_SLIM.clear();
         LAST_CHECK.clear();

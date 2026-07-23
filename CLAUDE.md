@@ -232,5 +232,6 @@ Same 13 tests as 1.20.1 plus 3 new:
 | 14 | **selectSkin forceRefresh retry** — retries session token with forceRefresh=true on null | Recovers from stale tokens |
 | 15 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
 | 16 | **Signed download URLs** — `downloadImageAsync()` appends `?exp=&sig=` HMAC query params using `requestSigningKey` | Resolves HTTP 401 when server enforces signed downloads |
+| 17 | **Single shared dynamic texture** — removed per-player `TextureManager` registrations; uses one `catskinc:dynamic/active` texture with pixel swap per render | Prevents F3+S debug dump from saving every player's skin to disk |
 
-> **Last updated:** 2026-07-21
+> **Last updated:** 2026-07-23

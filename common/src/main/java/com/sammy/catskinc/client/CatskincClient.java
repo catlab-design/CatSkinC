@@ -39,6 +39,7 @@ public final class CatskincClient {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
                 gameDir = mc.gameDirectory;
+                SkinManagerClient.initialize(mc);
             }
         } catch (Throwable ignored) {}
         ModConfig.init(gameDir);

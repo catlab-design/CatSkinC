@@ -18,6 +18,7 @@ All notable changes to this project should be documented in this file.
   - **AtomicInteger**: `consecutiveFailures` switched to `AtomicInteger` for correct failure counting.
   - **Always destroy old textures**: removed identity check gate on texture release to prevent GPU memory leaks.
 - **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
+- **Replaced per-player TextureManager registrations with a single shared dynamic texture**: CatSkinC no longer registers per-player textures with the vanilla `TextureManager`. Downloaded `NativeImage` objects are cached and pixel-copied into one shared `catskinc:dynamic/active` texture on each render frame. This prevents F3+S debug dumps from saving every player's skin to disk.
 
 ## [3.1.0] - 2026-06-12
 
