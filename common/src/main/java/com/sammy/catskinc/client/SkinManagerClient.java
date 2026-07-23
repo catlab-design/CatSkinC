@@ -2,9 +2,9 @@ package com.sammy.catskinc.client;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.texture.AbstractTexture;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
-import net.minecraft.client.texture.TextureManager;
 import net.minecraft.util.Identifier;
 
 import java.util.Map;
@@ -17,8 +17,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class SkinManagerClient {
-    private static final Identifier SHARED_TEXTURE_ID = Identifiers.mod("dynamic/active");
-    private static NativeImageBackedTexture sharedTexture;
     private static final Map<UUID, NativeImage> SKIN_IMAGES = new ConcurrentHashMap<>();
     private static final Map<UUID, NativeImage> TALKING_IMAGES = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> SLIM = new ConcurrentHashMap<>();
@@ -27,7 +25,9 @@ public final class SkinManagerClient {
     private static final Map<UUID, Long> LAST_CHECK = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
-    private static volatile UUID currentSkinUuid;
+
+    private static final Map<UUID, Identifier> VANILLA_TEXTURES = new ConcurrentHashMap<>();
+    private static final Map<UUID, NativeImage> ORIGINAL_PIXELS = new ConcurrentHashMap<>();
 
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
@@ -42,21 +42,15 @@ public final class SkinManagerClient {
     private SkinManagerClient() {
     }
 
-    public static void initialize(MinecraftClient client) {
-        if (sharedTexture != null) {
+    public static void onSkinLookup(UUID uuid, Identifier vanillaId) {
+        if (uuid == null || vanillaId == null) {
             return;
         }
-        client.execute(() -> {
-            NativeImage placeholder = new NativeImage(64, 64, true);
-            for (int y = 0; y < 64; y++) {
-                for (int x = 0; x < 64; x++) {
-                    placeholder.setColor(x, y, 0);
-                }
-            }
-            sharedTexture = new NativeImageBackedTexture(placeholder);
-            sharedTexture.setFilter(false, false);
-            client.getTextureManager().registerTexture(SHARED_TEXTURE_ID, sharedTexture);
-        });
+        VANILLA_TEXTURES.putIfAbsent(uuid, vanillaId);
+    }
+
+    static Identifier getVanillaIdentifier(UUID uuid) {
+        return uuid == null ? null : VANILLA_TEXTURES.get(uuid);
     }
 
     public static void setRefreshIntervalMs(long intervalMs) {
@@ -103,6 +97,7 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return;
         }
+        restorePixels(uuid);
         destroyTextures(MinecraftClient.getInstance(), uuid);
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
@@ -122,6 +117,7 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return;
         }
+        restorePixels(uuid);
         destroyTextures(MinecraftClient.getInstance(), uuid);
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
@@ -266,34 +262,34 @@ public final class SkinManagerClient {
         LAST_MOUTH_OPEN_URL.clear();
         IN_FLIGHT.clear();
         FAST_RETRY_SCHEDULED.clear();
+        restoreAllPixels();
+        VANILLA_TEXTURES.clear();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
 
-    private static Identifier resolveRenderTexture(UUID uuid) {
-        NativeImage image = SKIN_IMAGES.get(uuid);
-        if (image == null) {
-            return null;
-        }
-        if (VoiceActivityTracker.isSpeaking(uuid)) {
-            NativeImage talking = TALKING_IMAGES.get(uuid);
-            if (talking != null) {
-                image = talking;
-            }
-        }
-        if (!uuid.equals(currentSkinUuid)) {
-            swapTexture(image);
-            currentSkinUuid = uuid;
-        }
-        return SHARED_TEXTURE_ID;
-    }
-
-    private static void swapTexture(NativeImage source) {
-        if (sharedTexture == null || source == null) {
+    public static void injectPixels(UUID uuid, NativeImage source) {
+        if (uuid == null || source == null) {
             return;
         }
-        NativeImage target = sharedTexture.getImage();
+        Identifier vanillaId = VANILLA_TEXTURES.get(uuid);
+        if (vanillaId == null) {
+            return;
+        }
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            return;
+        }
+        AbstractTexture tex = client.getTextureManager().getTexture(vanillaId);
+        if (!(tex instanceof NativeImageBackedTexture nibTex)) {
+            return;
+        }
+        NativeImage target = nibTex.getImage();
         if (target == null) {
             return;
+        }
+        if (!ORIGINAL_PIXELS.containsKey(uuid)) {
+            NativeImage backup = copyImage(target);
+            ORIGINAL_PIXELS.put(uuid, backup);
         }
         int sw = source.getWidth();
         int sh = source.getHeight();
@@ -316,7 +312,79 @@ public final class SkinManagerClient {
                 target.setColor(x, y, 0);
             }
         }
-        sharedTexture.upload();
+        nibTex.upload();
+    }
+
+    private static void restorePixels(UUID uuid) {
+        if (uuid == null) {
+            return;
+        }
+        NativeImage original = ORIGINAL_PIXELS.remove(uuid);
+        if (original == null) {
+            return;
+        }
+        Identifier vanillaId = VANILLA_TEXTURES.get(uuid);
+        if (vanillaId == null) {
+            closeQuietly(original);
+            return;
+        }
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null) {
+            closeQuietly(original);
+            return;
+        }
+        AbstractTexture tex = client.getTextureManager().getTexture(vanillaId);
+        if (!(tex instanceof NativeImageBackedTexture nibTex)) {
+            closeQuietly(original);
+            return;
+        }
+        NativeImage target = nibTex.getImage();
+        if (target == null) {
+            closeQuietly(original);
+            return;
+        }
+        int w = Math.min(original.getWidth(), target.getWidth());
+        int h = Math.min(original.getHeight(), target.getHeight());
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                target.setColor(x, y, original.getColor(x, y));
+            }
+        }
+        nibTex.upload();
+        closeQuietly(original);
+    }
+
+    private static void restoreAllPixels() {
+        for (UUID uuid : ORIGINAL_PIXELS.keySet()) {
+            restorePixels(uuid);
+        }
+    }
+
+    private static NativeImage copyImage(NativeImage source) {
+        int w = source.getWidth();
+        int h = source.getHeight();
+        NativeImage copy = new NativeImage(w, h, true);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                copy.setColor(x, y, source.getColor(x, y));
+            }
+        }
+        return copy;
+    }
+
+    private static Identifier resolveRenderTexture(UUID uuid) {
+        NativeImage image = SKIN_IMAGES.get(uuid);
+        if (image == null) {
+            return null;
+        }
+        if (VoiceActivityTracker.isSpeaking(uuid)) {
+            NativeImage talking = TALKING_IMAGES.get(uuid);
+            if (talking != null) {
+                image = talking;
+            }
+        }
+        injectPixels(uuid, image);
+        return VANILLA_TEXTURES.get(uuid);
     }
 
     private static boolean shouldPoll(UUID uuid) {
@@ -337,6 +405,7 @@ public final class SkinManagerClient {
         closeQuietly(skin);
         NativeImage talking = TALKING_IMAGES.remove(uuid);
         closeQuietly(talking);
+        VANILLA_TEXTURES.remove(uuid);
     }
 
     private static NativeImage createOverlayImage(
@@ -423,6 +492,11 @@ public final class SkinManagerClient {
         IN_FLIGHT.clear();
         refreshIntervalMs = 5_000L;
         FAST_RETRY_SCHEDULED.clear();
+        for (NativeImage image : ORIGINAL_PIXELS.values()) {
+            closeQuietly(image);
+        }
+        VANILLA_TEXTURES.clear();
+        ORIGINAL_PIXELS.clear();
     }
 
     private record DownloadedImages(
@@ -431,4 +505,3 @@ public final class SkinManagerClient {
             boolean mouthOpenRequested) {
     }
 }
-

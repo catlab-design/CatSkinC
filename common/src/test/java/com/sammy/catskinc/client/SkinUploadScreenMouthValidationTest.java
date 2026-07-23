@@ -32,13 +32,13 @@ class SkinUploadScreenMouthValidationTest {
     private static Path sourcePath() {
         Path workingDirectory = Path.of("").toAbsolutePath();
         Path moduleRelative = workingDirectory.resolve(Path.of(
-                "src", "main", "java", "com", "sammy", "Catskinc", "client",
+                "src", "main", "java", "com", "sammy",                 "catskinc", "client",
                 "SkinUploadScreen.java"));
         if (Files.exists(moduleRelative)) {
             return moduleRelative;
         }
         return workingDirectory.resolve(Path.of(
-                "common", "src", "main", "java", "com", "sammy", "Catskinc", "client",
+                "common", "src", "main", "java", "com", "sammy", "catskinc", "client",
                 "SkinUploadScreen.java"));
     }
 }

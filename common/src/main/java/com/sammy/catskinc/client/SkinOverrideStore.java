@@ -1,8 +1,6 @@
 package com.sammy.catskinc.client;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.util.Identifier;
 
 import java.io.File;
@@ -10,6 +8,8 @@ import java.io.FileInputStream;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import net.minecraft.client.texture.NativeImage;
 
 public final class SkinOverrideStore {
     public static final class Entry {
@@ -46,26 +46,23 @@ public final class SkinOverrideStore {
         ENTRIES.put(uuid, new Entry(registeredTexture, slim, false));
     }
 
-    public static void putManaged(UUID uuid, NativeImageBackedTexture texture, boolean slim) {
-        if (uuid == null || texture == null) {
+    public static void putManaged(UUID uuid, NativeImage image, boolean slim) {
+        if (uuid == null || image == null) {
             return;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null) {
+        Identifier vanillaId = SkinManagerClient.getVanillaIdentifier(uuid);
+        if (vanillaId == null) {
             return;
         }
+        SkinManagerClient.injectPixels(uuid, image);
         clear(uuid);
-        Identifier id = Identifiers.mod("override/" + uuid + "/" + System.nanoTime());
-        client.getTextureManager().registerTexture(id, texture);
-        ENTRIES.put(uuid, new Entry(id, slim, true));
+        ENTRIES.put(uuid, new Entry(vanillaId, slim, true));
     }
 
     public static void putManagedFromFile(UUID uuid, File png, boolean slim) throws Exception {
         try (FileInputStream in = new FileInputStream(png)) {
             NativeImage image = NativeImage.read(in);
-            NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
-            texture.setFilter(false, false);
-            putManaged(uuid, texture, slim);
+            putManaged(uuid, image, slim);
         }
     }
 
@@ -74,12 +71,14 @@ public final class SkinOverrideStore {
             return;
         }
         Entry removed = ENTRIES.remove(uuid);
-        if (removed == null || !removed.managed) {
+        if (removed == null) {
             return;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client != null) {
-            client.getTextureManager().destroyTexture(removed.texture);
+        if (!removed.managed) {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client != null) {
+                client.getTextureManager().destroyTexture(removed.texture);
+            }
         }
     }
 
@@ -87,11 +86,13 @@ public final class SkinOverrideStore {
         MinecraftClient client = MinecraftClient.getInstance();
         for (var entry : ENTRIES.entrySet()) {
             Entry value = entry.getValue();
-            if (value != null && value.managed && client != null) {
+            if (value == null) {
+                continue;
+            }
+            if (!value.managed && client != null) {
                 client.getTextureManager().destroyTexture(value.texture);
             }
         }
         ENTRIES.clear();
     }
 }
-

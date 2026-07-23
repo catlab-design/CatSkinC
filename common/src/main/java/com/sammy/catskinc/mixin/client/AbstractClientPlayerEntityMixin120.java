@@ -15,13 +15,16 @@ import java.util.UUID;
 public abstract class AbstractClientPlayerEntityMixin120 {
     @Inject(
             method = "getSkinTexture()Lnet/minecraft/util/Identifier;",
-            at = @At("HEAD"),
+            at = @At("RETURN"),
             cancellable = true,
             require = 0
     )
     private void Catskinc$overrideTexture(CallbackInfoReturnable<Identifier> cir) {
         AbstractClientPlayerEntity self = (AbstractClientPlayerEntity) (Object) this;
         UUID uuid = self.getUuid();
+        Identifier original = cir.getReturnValue();
+
+        SkinManagerClient.onSkinLookup(uuid, original);
 
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
         if (entry != null) {
@@ -37,7 +40,7 @@ public abstract class AbstractClientPlayerEntityMixin120 {
 
     @Inject(
             method = "getModel()Ljava/lang/String;",
-            at = @At("HEAD"),
+            at = @At("RETURN"),
             cancellable = true,
             require = 0
     )
@@ -54,5 +57,3 @@ public abstract class AbstractClientPlayerEntityMixin120 {
         }
     }
 }
-
-

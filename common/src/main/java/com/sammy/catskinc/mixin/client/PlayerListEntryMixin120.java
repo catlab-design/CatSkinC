@@ -16,7 +16,7 @@ import java.util.UUID;
 public abstract class PlayerListEntryMixin120 {
     @Inject(
             method = "getSkinTexture()Lnet/minecraft/util/Identifier;",
-            at = @At("HEAD"),
+            at = @At("RETURN"),
             cancellable = true,
             require = 0
     )
@@ -25,6 +25,10 @@ public abstract class PlayerListEntryMixin120 {
         if (uuid == null) {
             return;
         }
+        Identifier original = cir.getReturnValue();
+
+        SkinManagerClient.onSkinLookup(uuid, original);
+
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
         if (entry != null) {
             cir.setReturnValue(entry.texture);
@@ -41,7 +45,7 @@ public abstract class PlayerListEntryMixin120 {
 
     @Inject(
             method = "getModel()Ljava/lang/String;",
-            at = @At("HEAD"),
+            at = @At("RETURN"),
             cancellable = true,
             require = 0
     )
@@ -68,5 +72,3 @@ public abstract class PlayerListEntryMixin120 {
         return profile == null ? null : profile.getId();
     }
 }
-
-

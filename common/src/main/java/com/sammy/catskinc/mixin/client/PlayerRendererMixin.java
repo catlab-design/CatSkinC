@@ -9,6 +9,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.UUID;
+
 @Mixin(value = PlayerEntityRenderer.class, priority = 2_000)
 public abstract class PlayerRendererMixin {
     @Inject(
@@ -18,11 +20,12 @@ public abstract class PlayerRendererMixin {
             require = 0
     )
     private void Catskinc$overrideTexture(AbstractClientPlayerEntity player, CallbackInfoReturnable<Identifier> cir) {
+        if (player == null) {
+            return;
+        }
         Identifier id = SkinManagerClient.getOrFetch(player);
         if (id != null) {
             cir.setReturnValue(id);
         }
     }
 }
-
-

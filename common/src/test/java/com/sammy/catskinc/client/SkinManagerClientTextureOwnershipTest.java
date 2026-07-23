@@ -9,35 +9,32 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Guards the texture-apply error path in SkinManagerClient. On exception it must
- * release only images not yet handed to a texture (which takes ownership), so it
- * neither leaks the merged idle/talking images nor double-frees the mouth
- * originals already closed by createOverlayImage. GL types can't run headless, so
- * we assert on the source like the other compat tests.
+ * Guards the texture-apply path in SkinManagerClient. When a cached skin is
+ * replaced it must close the old image to avoid native memory leaks. GL types
+ * can't run headless, so we assert on the source like the other compat tests.
  */
 class SkinManagerClientTextureOwnershipTest {
     @Test
     void catchPathReleasesOnlyUnconsumedImages() throws IOException {
         String source = Files.readString(sourcePath());
 
-        assertTrue(source.contains("skinConsumed")
-                        && source.contains("talkingConsumed"),
-                "the apply path should track which images a texture took ownership of");
-        assertTrue(source.contains("if (!skinConsumed)")
-                        && source.contains("if (!talkingConsumed)"),
-                "the catch block should release only images not yet consumed");
+        assertTrue(source.contains("closeQuietly(previousSkin)"),
+                "the apply path should release the previous skin image when replaced");
+        assertTrue(source.contains("closeQuietly(previousTalking)")
+                        || source.contains("closeQuietly(removed)"),
+                "the apply path should release the previous talking image when replaced or removed");
     }
 
     private static Path sourcePath() {
         Path workingDirectory = Path.of("").toAbsolutePath();
         Path moduleRelative = workingDirectory.resolve(Path.of(
-                "src", "main", "java", "com", "sammy", "Catskinc", "client",
+                "src", "main", "java", "com", "sammy", "catskinc", "client",
                 "SkinManagerClient.java"));
         if (Files.exists(moduleRelative)) {
             return moduleRelative;
         }
         return workingDirectory.resolve(Path.of(
-                "common", "src", "main", "java", "com", "sammy", "Catskinc", "client",
+                "common", "src", "main", "java", "com", "sammy", "catskinc", "client",
                 "SkinManagerClient.java"));
     }
 }
