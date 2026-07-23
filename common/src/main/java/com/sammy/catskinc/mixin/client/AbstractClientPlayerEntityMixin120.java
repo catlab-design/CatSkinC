@@ -1,6 +1,7 @@
 package com.sammy.catskinc.mixin.client;
 
 import com.sammy.catskinc.client.PlayerSkinOverrideResolver;
+import com.sammy.catskinc.client.SkinManagerClient;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.PlayerSkin;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,8 +22,10 @@ public abstract class AbstractClientPlayerEntityMixin120 {
     private void Catskinc$overrideSkin(CallbackInfoReturnable<PlayerSkin> cir) {
         AbstractClientPlayer self = (AbstractClientPlayer) (Object) this;
         UUID uuid = self.getUUID();
-        cir.setReturnValue(PlayerSkinOverrideResolver.resolvePlayerSkin(uuid, cir.getReturnValue()));
+        PlayerSkin baseSkin = cir.getReturnValue();
+        if (baseSkin != null) {
+            SkinManagerClient.onSkinLookup(uuid, baseSkin.texture());
+        }
+        cir.setReturnValue(PlayerSkinOverrideResolver.resolvePlayerSkin(uuid, baseSkin));
     }
 }
-
-

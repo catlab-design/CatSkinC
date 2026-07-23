@@ -44,7 +44,7 @@ class PlayerRendererFirstPersonSkinTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "mixin",
                 "client",
                 "PlayerRendererMixin.java"));
@@ -58,7 +58,7 @@ class PlayerRendererFirstPersonSkinTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "mixin",
                 "client",
                 "PlayerRendererMixin.java"));

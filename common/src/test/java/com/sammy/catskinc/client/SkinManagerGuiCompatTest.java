@@ -29,7 +29,7 @@ class SkinManagerGuiCompatTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "mixin",
                 "client",
                 "SkinManagerMixin.java"));
@@ -43,7 +43,7 @@ class SkinManagerGuiCompatTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "mixin",
                 "client",
                 "SkinManagerMixin.java"));

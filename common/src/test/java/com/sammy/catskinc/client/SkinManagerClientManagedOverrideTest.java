@@ -27,7 +27,7 @@ class SkinManagerClientManagedOverrideTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "client",
                 "SkinManagerClient.java"));
         if (Files.exists(moduleRelativePath)) {
@@ -40,7 +40,7 @@ class SkinManagerClientManagedOverrideTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "client",
                 "SkinManagerClient.java"));
     }

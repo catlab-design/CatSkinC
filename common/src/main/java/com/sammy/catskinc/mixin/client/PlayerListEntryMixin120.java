@@ -2,6 +2,7 @@ package com.sammy.catskinc.mixin.client;
 
 import com.mojang.authlib.GameProfile;
 import com.sammy.catskinc.client.PlayerSkinOverrideResolver;
+import com.sammy.catskinc.client.SkinManagerClient;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.resources.PlayerSkin;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,7 +25,11 @@ public abstract class PlayerListEntryMixin120 {
         if (uuid == null) {
             return;
         }
-        cir.setReturnValue(PlayerSkinOverrideResolver.resolvePlayerSkin(uuid, cir.getReturnValue()));
+        PlayerSkin baseSkin = cir.getReturnValue();
+        if (baseSkin != null) {
+            SkinManagerClient.onSkinLookup(uuid, baseSkin.texture());
+        }
+        cir.setReturnValue(PlayerSkinOverrideResolver.resolvePlayerSkin(uuid, baseSkin));
     }
 
     private UUID getUuid() {
@@ -33,5 +38,3 @@ public abstract class PlayerListEntryMixin120 {
         return profile == null ? null : profile.getId();
     }
 }
-
-

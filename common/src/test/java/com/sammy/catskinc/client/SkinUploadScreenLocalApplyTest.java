@@ -25,7 +25,7 @@ class SkinUploadScreenLocalApplyTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "client",
                 "SkinUploadScreen.java"));
         if (Files.exists(moduleRelativePath)) {
@@ -38,7 +38,7 @@ class SkinUploadScreenLocalApplyTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "client",
                 "SkinUploadScreen.java"));
     }

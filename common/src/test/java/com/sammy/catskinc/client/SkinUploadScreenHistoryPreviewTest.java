@@ -27,7 +27,7 @@ class SkinUploadScreenHistoryPreviewTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "client",
                 "SkinUploadScreen.java"));
         if (Files.exists(moduleRelativePath)) {
@@ -40,7 +40,7 @@ class SkinUploadScreenHistoryPreviewTest {
                 "java",
                 "com",
                 "sammy",
-                "Catskinc",
+                "catskinc",
                 "client",
                 "SkinUploadScreen.java"));
     }

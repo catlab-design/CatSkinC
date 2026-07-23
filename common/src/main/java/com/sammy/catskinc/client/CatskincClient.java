@@ -39,7 +39,6 @@ public final class CatskincClient {
             Minecraft mc = Minecraft.getInstance();
             if (mc != null) {
                 gameDir = mc.gameDirectory;
-                SkinManagerClient.initialize(mc);
             }
         } catch (Throwable ignored) {}
         ModConfig.init(gameDir);
@@ -179,17 +178,17 @@ public final class CatskincClient {
                     return;
                 }
                 client.execute(() -> {
+                    if (event.slim != null) {
+                        SkinManagerClient.setSlim(event.uuid, event.slim);
+                    }
                     boolean isClearEvent = event.url == null || event.url.isBlank()
                             || event.id == null || event.id.isBlank();
                     if (isClearEvent) {
                         ModLog.debug("SSE clear event for {}: removing skin caches", event.uuid);
+                        SkinManagerClient.clearTexture(event.uuid);
+                    } else {
                         SkinManagerClient.forceFetch(event.uuid);
-                        return;
                     }
-                    if (event.slim != null) {
-                        SkinManagerClient.setSlim(event.uuid, event.slim);
-                    }
-                    SkinManagerClient.forceFetch(event.uuid);
                 });
             });
 

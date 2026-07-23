@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 
 public final class SkinOverrideStore {
@@ -45,26 +44,23 @@ public final class SkinOverrideStore {
         ENTRIES.put(uuid, new Entry(registeredTexture, slim, false));
     }
 
-    public static void putManaged(UUID uuid, DynamicTexture texture, boolean slim) {
-        if (uuid == null || texture == null) {
+    public static void putManaged(UUID uuid, NativeImage image, boolean slim) {
+        if (uuid == null || image == null) {
             return;
         }
-        Minecraft client = Minecraft.getInstance();
-        if (client == null) {
+        ResourceLocation vanillaId = SkinManagerClient.getVanillaIdentifier(uuid);
+        if (vanillaId == null) {
             return;
         }
+        SkinManagerClient.injectPixels(uuid, image);
         clear(uuid);
-        ResourceLocation id = Identifiers.mod("override/" + uuid + "/" + System.nanoTime());
-        client.getTextureManager().register(id, texture);
-        ENTRIES.put(uuid, new Entry(id, slim, true));
+        ENTRIES.put(uuid, new Entry(vanillaId, slim, true));
     }
 
     public static void putManagedFromFile(UUID uuid, File png, boolean slim) throws Exception {
         try (FileInputStream in = new FileInputStream(png)) {
             NativeImage image = NativeImage.read(in);
-            DynamicTexture texture = new DynamicTexture(image);
-            texture.setFilter(false, false);
-            putManaged(uuid, texture, slim);
+            putManaged(uuid, image, slim);
         }
     }
 
@@ -73,12 +69,14 @@ public final class SkinOverrideStore {
             return;
         }
         Entry removed = ENTRIES.remove(uuid);
-        if (removed == null || !removed.managed) {
+        if (removed == null) {
             return;
         }
-        Minecraft client = Minecraft.getInstance();
-        if (client != null) {
-            client.getTextureManager().release(removed.texture);
+        if (!removed.managed) {
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) {
+                client.getTextureManager().release(removed.texture);
+            }
         }
     }
 
@@ -86,12 +84,13 @@ public final class SkinOverrideStore {
         Minecraft client = Minecraft.getInstance();
         for (var entry : ENTRIES.entrySet()) {
             Entry value = entry.getValue();
-            if (value != null && value.managed && client != null) {
+            if (value == null) {
+                continue;
+            }
+            if (!value.managed && client != null) {
                 client.getTextureManager().release(value.texture);
             }
         }
         ENTRIES.clear();
     }
 }
-
-
