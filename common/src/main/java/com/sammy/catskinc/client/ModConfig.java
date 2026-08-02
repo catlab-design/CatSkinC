@@ -17,6 +17,7 @@ public final class ModConfig {
     private boolean showUploadToast = true;
     private boolean showInfoToast = true;
     private boolean showErrorToast = true;
+    private String requestSigningKey = null;
 
     private static ModConfig instance = new ModConfig();
 
@@ -100,6 +101,14 @@ public final class ModConfig {
 
     public void setShowErrorToast(boolean showErrorToast) {
         this.showErrorToast = showErrorToast;
+    }
+
+    public String getRequestSigningKey() {
+        return requestSigningKey;
+    }
+
+    public void setRequestSigningKey(String requestSigningKey) {
+        this.requestSigningKey = requestSigningKey;
     }
 }
 

@@ -3,7 +3,7 @@
 Cloud-based skin upload, skin history, and live skin sync mod for Minecraft 1.20.1.
 
 - **Version:** 3.1.1
-- **License:** GPL-3.0-or-later
+- **License:** CC BY-NC-SA 4.0
 - **Authors:** Team CatLab Design (originally Q Team Studio)
 
 ---
@@ -235,7 +235,7 @@ Enabled by default (`harden_build=true` in `gradle.properties`):
 
 ## CI/CD
 
-- **GitHub Actions** (`.github/workflows/ci.yml`): Build on push/PR to main/master, Java 17
+- **GitHub Actions** (`.github/workflows/ci.yml`): Runs on push/PR to main/master, Java 17 — `:common:test` + `:common:compileJava` + `:fabric:compileJava` + `:forge:compileJava`
 - **GitLab CI** (`.gitlab-ci.yml`): Validate + build stages, Gradle caching
 - **Jenkins** (`Jenkinsfile`): Pipeline with checkout, validate, build JARs
 
@@ -245,8 +245,8 @@ Enabled by default (`harden_build=true` in `gradle.properties`):
 
 - **Branch:** `main`
 - **Remote:** `origin` configured
-- **Latest commit:** `e62befa` — "authors Q Team Studio changed Name to Team CatLab Design"
-- **Working tree:** Clean
+- **Latest commit:** `c0bfbba` — "fix: eliminate F3+S debug skin dumps by hijacking vanilla textures in-place"
+- **Working tree:** WIP + fixes (fallback texture recovery, request signing key), pending commit
 
 ---
 
@@ -283,5 +283,9 @@ Enabled by default (`harden_build=true` in `gradle.properties`):
 | 16 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
 | 17 | **Signed download URLs** — `downloadImageAsync()` appends `?exp=&sig=` HMAC query params using `requestSigningKey` | Resolves HTTP 401 when server enforces signed downloads |
 | 18 | **Single shared dynamic texture** — removed per-player `TextureManager` registrations; uses one `catskinc:dynamic/active` texture with pixel swap per render | Prevents F3+S debug dump from saving every player's skin to disk |
+| 19 | **Fallback texture recovery** — `injectPixels()` now recreates the fallback `NativeImageBackedTexture` whenever the registered texture is not dynamic (e.g., after F3+T resource reload); stale fallback entries are destroyed first | Fallback skins no longer show missing-texture checkerboard after texture resets |
+| 20 | **Configurable request signing key** — `resolveRequestSigningKey()` reads `catskinc.requestSigningKey` JVM prop → `CATSKINC_REQUEST_SIGNING_KEY` env → `ModConfig` → default | Operators can set the HMAC key without code changes |
+| 21 | **CI upgraded** — `.github/workflows/ci.yml` now runs `:common:test` in addition to compiling all loaders (Java 17) | Automated test coverage in CI |
+| 22 | **License** — switched to CC BY-NC-SA 4.0 (was GPL-3.0-or-later) | Noncommercial share-alike terms |
 
 > **Last updated:** 2026-07-23

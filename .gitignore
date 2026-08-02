@@ -27,6 +27,7 @@ hs_err_pid*
 # Gradle / Loom / Architectury
 .gradle/
 **/.gradle/
+.gradle-home/
 build/
 **/build/
 run/

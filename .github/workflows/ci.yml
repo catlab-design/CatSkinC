@@ -28,5 +28,8 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x gradlew
 
+      - name: Run Tests (Common)
+        run: ./gradlew --no-daemon :common:test
+
       - name: Compile Common/Fabric/Forge
         run: ./gradlew --no-daemon :common:compileJava :fabric:compileJava :forge:compileJava
