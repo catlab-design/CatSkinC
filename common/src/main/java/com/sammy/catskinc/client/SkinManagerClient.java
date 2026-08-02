@@ -28,6 +28,7 @@ public final class SkinManagerClient {
 
     private static final Map<UUID, ResourceLocation> VANILLA_TEXTURES = new ConcurrentHashMap<>();
     private static final Map<UUID, NativeImage> ORIGINAL_PIXELS = new ConcurrentHashMap<>();
+    private static final Set<UUID> FALLBACK_TEXTURES = ConcurrentHashMap.newKeySet();
 
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
@@ -263,6 +264,16 @@ public final class SkinManagerClient {
         IN_FLIGHT.clear();
         FAST_RETRY_SCHEDULED.clear();
         restoreAllPixels();
+        Minecraft client = Minecraft.getInstance();
+        if (client != null) {
+            for (UUID uuid : FALLBACK_TEXTURES) {
+                ResourceLocation fallbackId = VANILLA_TEXTURES.get(uuid);
+                if (fallbackId != null) {
+                    client.getTextureManager().release(fallbackId);
+                }
+            }
+        }
+        FALLBACK_TEXTURES.clear();
         VANILLA_TEXTURES.clear();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
@@ -280,39 +291,33 @@ public final class SkinManagerClient {
             return;
         }
         AbstractTexture tex = client.getTextureManager().getTexture(vanillaId);
-        if (!(tex instanceof DynamicTexture dynTex)) {
-            return;
-        }
-        NativeImage target = dynTex.getPixels();
-        if (target == null) {
-            return;
-        }
-        if (!ORIGINAL_PIXELS.containsKey(uuid)) {
-            NativeImage backup = copyImage(target);
-            ORIGINAL_PIXELS.put(uuid, backup);
-        }
-        int sw = source.getWidth();
-        int sh = source.getHeight();
-        int tw = target.getWidth();
-        int th = target.getHeight();
-        int w = Math.min(sw, tw);
-        int h = Math.min(sh, th);
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                target.setPixelRGBA(x, y, source.getPixelRGBA(x, y));
+        if (tex instanceof DynamicTexture dynTex) {
+            NativeImage target = dynTex.getPixels();
+            if (target == null) {
+                return;
             }
-        }
-        for (int y = h; y < th; y++) {
-            for (int x = 0; x < tw; x++) {
-                target.setPixelRGBA(x, y, 0);
+            if (!FALLBACK_TEXTURES.contains(uuid) && !ORIGINAL_PIXELS.containsKey(uuid)) {
+                ORIGINAL_PIXELS.put(uuid, copyImage(target));
             }
-        }
-        for (int y = 0; y < h; y++) {
-            for (int x = w; x < tw; x++) {
-                target.setPixelRGBA(x, y, 0);
+            blitPixels(target, source);
+            dynTex.upload();
+        } else {
+            if (FALLBACK_TEXTURES.remove(uuid)) {
+                ResourceLocation stale = VANILLA_TEXTURES.get(uuid);
+                if (stale != null) {
+                    client.getTextureManager().release(stale);
+                }
             }
+            int w = source.getWidth();
+            int h = source.getHeight();
+            NativeImage target = new NativeImage(w, h, true);
+            blitPixels(target, source);
+            DynamicTexture fallbackTex = new DynamicTexture(target);
+            ResourceLocation fallbackId = Identifiers.mod("skins/" + uuid);
+            client.getTextureManager().register(fallbackId, fallbackTex);
+            VANILLA_TEXTURES.put(uuid, fallbackId);
+            FALLBACK_TEXTURES.add(uuid);
         }
-        dynTex.upload();
     }
 
     private static void restorePixels(UUID uuid) {
@@ -357,6 +362,30 @@ public final class SkinManagerClient {
     private static void restoreAllPixels() {
         for (UUID uuid : ORIGINAL_PIXELS.keySet()) {
             restorePixels(uuid);
+        }
+    }
+
+    private static void blitPixels(NativeImage target, NativeImage source) {
+        int sw = source.getWidth();
+        int sh = source.getHeight();
+        int tw = target.getWidth();
+        int th = target.getHeight();
+        int w = Math.min(sw, tw);
+        int h = Math.min(sh, th);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                target.setPixelRGBA(x, y, source.getPixelRGBA(x, y));
+            }
+        }
+        for (int y = h; y < th; y++) {
+            for (int x = 0; x < tw; x++) {
+                target.setPixelRGBA(x, y, 0);
+            }
+        }
+        for (int y = 0; y < h; y++) {
+            for (int x = w; x < tw; x++) {
+                target.setPixelRGBA(x, y, 0);
+            }
         }
     }
 
@@ -405,6 +434,12 @@ public final class SkinManagerClient {
         closeQuietly(skin);
         NativeImage talking = TALKING_IMAGES.remove(uuid);
         closeQuietly(talking);
+        if (client != null && FALLBACK_TEXTURES.remove(uuid)) {
+            ResourceLocation fallbackId = VANILLA_TEXTURES.get(uuid);
+            if (fallbackId != null) {
+                client.getTextureManager().release(fallbackId);
+            }
+        }
         VANILLA_TEXTURES.remove(uuid);
     }
 
@@ -482,6 +517,7 @@ public final class SkinManagerClient {
             closeQuietly(image);
         }
         VANILLA_TEXTURES.clear();
+        FALLBACK_TEXTURES.clear();
         ORIGINAL_PIXELS.clear();
     }
 

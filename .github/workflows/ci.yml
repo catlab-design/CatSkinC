@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 1.21.1
+  pull_request:
+    branches:
+      - main
+      - 1.21.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x gradlew
+
+      - name: Run Tests (Common)
+        run: ./gradlew --no-daemon :common:test
+
+      - name: Compile Fabric
+        run: ./gradlew --no-daemon :fabric:compileJava
+
+      - name: Compile NeoForge
+        run: ./gradlew --no-daemon :neoforge:compileJava

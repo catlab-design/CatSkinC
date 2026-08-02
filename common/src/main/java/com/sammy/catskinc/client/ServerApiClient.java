@@ -228,12 +228,22 @@ public final class ServerApiClient {
                 DEFAULT_SELECTED_CACHE_TTL_MS,
                 DEFAULT_PING_CACHE_TTL_MS,
                 DEFAULT_ALLOW_INSECURE_HTTP,
-                DEFAULT_REQUEST_SIGNING_KEY,
+                resolveRequestSigningKey(),
                 normalizePin(DEFAULT_TLS_PIN_SHA256),
                 apiHostPort,
                 trustedAssetHostPorts,
                 DEFAULT_MAX_JSON_BYTES,
                 DEFAULT_MAX_IMAGE_BYTES);
+    }
+
+    private static String resolveRequestSigningKey() {
+        String fromProp = System.getProperty("catskinc.requestSigningKey");
+        if (fromProp != null && !fromProp.isBlank()) return fromProp.trim();
+        String fromEnv = System.getenv("CATSKINC_REQUEST_SIGNING_KEY");
+        if (fromEnv != null && !fromEnv.isBlank()) return fromEnv.trim();
+        String fromConfig = ModConfig.get().getRequestSigningKey();
+        if (fromConfig != null && !fromConfig.isBlank()) return fromConfig.trim();
+        return DEFAULT_REQUEST_SIGNING_KEY;
     }
 
     public static void setAuthToken(String token) {

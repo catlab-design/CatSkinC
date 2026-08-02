@@ -3,7 +3,7 @@
 Cloud-based skin upload, skin history, and live skin sync mod for Minecraft 1.21.1.
 
 - **Version:** 3.1.1
-- **License:** GNU GPL v3.0
+- **License:** CC BY-NC-SA 4.0
 - **Authors:** Team CatLab Design
 
 ---
@@ -186,7 +186,7 @@ Same 13 tests as 1.20.1 plus 3 new:
 
 ## CI/CD
 
-- **GitHub Actions** (`.github/workflows/ci.yml`): Build on push/PR to main/master, Java 21
+- **GitHub Actions** (`.github/workflows/ci.yml`): Runs on push/PR to main/1.21.1, Java 21 — `:common:test` + `:fabric:compileJava` + `:neoforge:compileJava`
 
 ---
 
@@ -194,7 +194,7 @@ Same 13 tests as 1.20.1 plus 3 new:
 
 - **Branch:** `1.21.1` (tracking `origin/1.21.1`)
 - **Remote branches:** `origin/1.20.1`, `origin/1.21.1`, `origin/26.1.2`, `origin/main`
-- **Status:** Clean working tree
+- **Status:** Working tree with WIP + fixes (fallback texture recovery, request signing key), pending commit
 - **Commits:** 17 total
 
 ---
@@ -233,5 +233,9 @@ Same 13 tests as 1.20.1 plus 3 new:
 | 15 | **NativeImage leak fix** — `refreshPreviewTexture()` closes NativeImage on exception | Frees native GPU memory on error |
 | 16 | **Signed download URLs** — `downloadImageAsync()` appends `?exp=&sig=` HMAC query params using `requestSigningKey` | Resolves HTTP 401 when server enforces signed downloads |
 | 17 | **Single shared dynamic texture** — removed per-player `TextureManager` registrations; uses one `catskinc:dynamic/active` texture with pixel swap per render | Prevents F3+S debug dump from saving every player's skin to disk |
+| 18 | **Fallback texture recovery** — `injectPixels()` now recreates the fallback `DynamicTexture` whenever the registered texture is not dynamic (e.g., after F3+T resource reload); stale fallback entries are released first | Fallback skins no longer show missing-texture checkerboard after texture resets |
+| 19 | **Configurable request signing key** — `resolveRequestSigningKey()` reads `catskinc.requestSigningKey` JVM prop → `CATSKINC_REQUEST_SIGNING_KEY` env → `ModConfig` → default | Operators can set the HMAC key without code changes |
+| 20 | **CI added** — `.github/workflows/ci.yml` runs `:common:test` + fabric/neoforge compile on push/PR (Java 21) | Automated test + compile coverage |
+| 21 | **License** — switched to CC BY-NC-SA 4.0 (was GPL-3.0) | Noncommercial share-alike terms |
 
 > **Last updated:** 2026-07-23

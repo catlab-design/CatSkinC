@@ -102,6 +102,12 @@ $RECYCLE.BIN/
 
 .gradle
 build/
+.gradle-home/
+loom-cache/
+**/loom-cache/
+**/remappedSrc/
+logs/
+crash-reports/
 
 # Ignore Gradle GUI config
 gradle-app.setting
