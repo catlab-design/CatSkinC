@@ -1,3 +1,17 @@
+// Force patched versions of vulnerable transitive deps on the buildscript
+// (Gradle plugin) classpath. These are build-tooling libs pulled in by the
+// Loom/Architectury/Shadow plugins; they are not shipped in the mod JAR.
+buildscript {
+    configurations.all {
+        resolutionStrategy {
+            force 'org.apache.commons:commons-text:1.12.0'
+            force 'commons-beanutils:commons-beanutils:1.11.0'
+            force 'org.codehaus.plexus:plexus-utils:3.6.1'
+            force 'org.apache.commons:commons-compress:1.26.0'
+        }
+    }
+}
+
 plugins {
     id 'dev.architectury.loom' version '1.9-SNAPSHOT' apply false
     id 'architectury-plugin' version '3.4-SNAPSHOT'
@@ -65,6 +79,37 @@ subprojects {
             content {
                 includeGroup "maven.modrinth"
             }
+        }
+    }
+
+    // Security hardening: force patched versions of transitive dependencies that
+    // Dependabot flags as vulnerable. These are Minecraft-provided runtime libs
+    // (netty, log4j, guava, commons-*) that are NOT bundled into the shipped mod
+    // JAR, but forcing the patched versions keeps the dev runtime and CI clean.
+    configurations.all {
+        resolutionStrategy {
+            // Netty (GHSA-558v-64gr-wgg4 and related) -> 4.1.136.Final
+            force 'io.netty:netty-buffer:4.1.136.Final'
+            force 'io.netty:netty-codec:4.1.136.Final'
+            force 'io.netty:netty-common:4.1.136.Final'
+            force 'io.netty:netty-handler:4.1.136.Final'
+            force 'io.netty:netty-resolver:4.1.136.Final'
+            force 'io.netty:netty-transport:4.1.136.Final'
+            force 'io.netty:netty-transport-classes-epoll:4.1.136.Final'
+            force 'io.netty:netty-transport-native-epoll:4.1.136.Final'
+            force 'io.netty:netty-transport-native-unix-common:4.1.136.Final'
+            // Log4j -> 2.25.4
+            force 'org.apache.logging.log4j:log4j-api:2.25.4'
+            force 'org.apache.logging.log4j:log4j-core:2.25.4'
+            force 'org.apache.logging.log4j:log4j-slf4j2-impl:2.25.4'
+            // Guava -> 32.0.0-jre
+            force 'com.google.guava:guava:32.0.0-jre'
+            // Commons IO -> 2.16.1
+            force 'commons-io:commons-io:2.16.1'
+            // Commons Compress -> 1.26.0
+            force 'org.apache.commons:commons-compress:1.26.0'
+            // Commons Lang3 -> 3.18.0
+            force 'org.apache.commons:commons-lang3:3.18.0'
         }
     }
 

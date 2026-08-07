@@ -2,6 +2,18 @@
 
 All notable changes to this project should be documented in this file.
 
+## [4.0.0] - 2026-08-07
+
+### Security
+
+- **Hardened transitive dependencies against Dependabot advisories.** Added `resolutionStrategy { force ... }` constraints in `build.gradle` to pin patched versions of vulnerable transitive libraries on both the project and buildscript classpaths:
+  - Netty → `4.1.136.Final` (fixes GHSA-558v-64gr-wgg4 Bzip2Decoder infinite loop and related netty advisories).
+  - Log4j → `2.25.4` (fixes Log4j TLS hostname verification, XML escaping, and related advisories).
+  - Guava → `32.0.0-jre` (fixes temp-dir and information-disclosure advisories).
+  - Commons IO → `2.16.1`, Commons Compress → `1.26.0`, Commons Lang3 → `3.18.0`.
+  - Buildscript classpath: Commons Text → `1.12.0`, Commons Beanutils → `1.11.0`, Plexus Utils → `3.6.1`.
+- These libraries are Minecraft-provided runtime/build-tooling dependencies and are **not bundled** into the shipped mod JAR, so the end-user artifact is unaffected; the constraints keep the dev runtime and CI dependency graph clean.
+
 ## [3.1.1] - 2026-07-21
 
 ### Added

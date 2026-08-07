@@ -58,3 +58,5 @@ gradle-app.setting
 fabric/src/main/resources/assets/
 
 tmp_decompile/
+
+report.txt
