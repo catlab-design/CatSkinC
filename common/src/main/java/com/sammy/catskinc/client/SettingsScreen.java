@@ -102,17 +102,17 @@ public final class SettingsScreen extends Screen {
         });
         this.addRenderableWidget(this.ipEditBox);
 
-        // Reload IP button next to IP field
-        net.minecraft.client.gui.components.Button reloadButton = net.minecraft.client.gui.components.Button.builder(
-                Component.literal("↻"), button -> {
-            ModSounds.playClick();
-            ServerApiClient.reconnect(event -> {});
-            Toasts.info(
-                Component.translatable("toast.catskinc.event.title"),
-                Component.translatable("toast.catskinc.reconnecting"));
-        }).bounds(this.panelX + this.panelW - 80, this.panelY + 52, 70, 16).build();
-        this.addRenderableWidget(reloadButton);
+        // Reload button position (stored for click handling)
+        this.reloadButtonX = 0;
+        this.reloadButtonY = 0;
+        this.reloadButtonW = 40;
+        this.reloadButtonH = 16;
     }
+
+    private int reloadButtonX;
+    private int reloadButtonY;
+    private int reloadButtonW;
+    private int reloadButtonH;
 
     @Override
     public void render(GuiGraphics drawContext, int mouseX, int mouseY, float delta) {
@@ -197,6 +197,13 @@ public final class SettingsScreen extends Screen {
 
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+
+                        // Reload button next to IP field - same style as Reset button
+                        this.reloadButtonX = rightOffset - 85;
+                        this.reloadButtonY = y;
+                        this.reloadButtonW = 40;
+                        this.reloadButtonH = 16;
+                        drawRowButton(drawContext, mouseX, mouseY, this.reloadButtonX, y, this.reloadButtonW, this.reloadButtonH, "↻");
                     } else if (item.key.equals("connectionMode")) {
                         // Connection Mode dropdown
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
