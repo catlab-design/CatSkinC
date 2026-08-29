@@ -8,6 +8,7 @@ import com.mojang.authlib.exceptions.AuthenticationException;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.text.Text;
 
 import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
@@ -125,8 +126,10 @@ public final class ServerApiClient {
     /** Pending local selections to eliminate select-fetch race. Key: UUID, Value: skin URL. */
     private static final ConcurrentHashMap<UUID, SelectedSkin> PENDING_SELECTIONS = new ConcurrentHashMap<>();
 
-    /** Protocol version this client speaks. Must match server MIN_PROTOCOL_VERSION. */
+    /** Protocol version this client speaks for REST/SSE. Must match server MIN_PROTOCOL_VERSION. */
     public static final int CLIENT_PROTOCOL_VERSION = 2;
+    /** WebSocket protocol version (v3). Server MIN_WS_PROTOCOL_VERSION = 3. */
+    public static final int WS_PROTOCOL_VERSION = 3;
     private static final String HEADER_PROTOCOL = "x-catskinc-protocol";
     /** Header carrying the per-player session token on write requests. */
     private static final String HEADER_SESSION = "x-catskinc-session";
@@ -162,6 +165,11 @@ public final class ServerApiClient {
     private static volatile Thread sseThread;
     private static volatile boolean sseStop;
     private static volatile HttpURLConnection sseConnection;
+
+    // WebSocket support (protocol v3+)
+    private static volatile WebSocketClient wsClient;
+    private static volatile boolean wsStop;
+
     private static final ConcurrentHashMap<UUID, CachedSelected> SELECTED_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, CompletableFuture<SelectedSkin>> SELECTED_IN_FLIGHT = new ConcurrentHashMap<>();
     private static volatile CachedPing cachedPing;
@@ -171,6 +179,40 @@ public final class ServerApiClient {
     private static volatile long circuitOpenUntilMs;
     private static final int CIRCUIT_BREAKER_THRESHOLD = 3;
     private static final long CIRCUIT_BREAKER_COOLDOWN_MS = 30_000L;
+
+    /**
+     * Check if circuit breaker is open (shared with WebSocket client).
+     */
+    public static boolean isCircuitOpen() {
+        return circuitOpenUntilMs > System.currentTimeMillis();
+    }
+
+    /**
+     * Get the timestamp when circuit breaker closes (shared with WebSocket client).
+     */
+    public static long getCircuitOpenUntilMs() {
+        return circuitOpenUntilMs;
+    }
+
+    /**
+     * Record a failure for circuit breaker (shared with WebSocket client).
+     */
+    public static void recordFailure() {
+        int failures = consecutiveFailures.incrementAndGet();
+        if (failures >= CIRCUIT_BREAKER_THRESHOLD) {
+            circuitOpenUntilMs = System.currentTimeMillis() + CIRCUIT_BREAKER_COOLDOWN_MS;
+            ModLog.warn("Shared circuit breaker opened for {} ms after {} failures",
+                    CIRCUIT_BREAKER_COOLDOWN_MS, failures);
+        }
+    }
+
+    /**
+     * Reset circuit breaker on success (shared with WebSocket client).
+     */
+    public static void resetCircuitBreaker() {
+        consecutiveFailures.set(0);
+        circuitOpenUntilMs = 0L;
+    }
 
     private record RuntimeConfig(
             String baseUrl,
@@ -971,6 +1013,157 @@ public final class ServerApiClient {
         if (thread != null) {
             thread.interrupt();
         }
+    }
+
+    // --- WebSocket support (protocol v3+) ---
+
+    /**
+     * Start WebSocket connection for real-time skin updates.
+     * Uses protocol version 3 (MIN_WS_PROTOCOL_VERSION on server).
+     * Falls back to SSE internally if WebSocket is unavailable.
+     */
+    public static synchronized void startWebSocket(Consumer<UpdateEvent> consumer) {
+        if (wsClient != null) {
+            ModLog.trace("WebSocket start skipped: already running");
+            return;
+        }
+        if (isClientOutdated()) {
+            ModLog.trace("WebSocket start skipped: client outdated");
+            return;
+        }
+        wsStop = false;
+        consecutiveFailures.set(0);
+        circuitOpenUntilMs = 0L;
+
+        RuntimeConfig cfg = runtimeConfig();
+        String wsBaseUrl = cfg.baseUrl;
+        String signingKey = cfg.requestSigningKey;
+
+        WebSocketClient.Listener listener = new WebSocketClient.Listener() {
+            @Override
+            public void onOpen() {
+                ModLog.info("WebSocket connected");
+            }
+
+            @Override
+            public void onClose(int statusCode, String reason) {
+                ModLog.debug("WebSocket closed: code={}, reason={}", statusCode, reason);
+                if (!wsStop) {
+                    // Reconnection is handled by WebSocketClient internally
+                }
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                ModLog.warn("WebSocket error: {}", error.getMessage());
+            }
+
+            @Override
+            public void onSkinUpdate(UpdateEvent event) {
+                if (event != null && event.uuid != null && consumer != null) {
+                    ModLog.trace("WS event: uuid={}, id={}, slim={}, url={}, mouthOpen={}, mouthClose={}",
+                            event.uuid, event.id, event.slim, event.url,
+                            event.mouthOpenUrl, event.mouthCloseUrl);
+                    // Run on main thread for texture operations
+                    MinecraftClient mc = MinecraftClient.getInstance();
+                    if (mc != null) {
+                        mc.execute(() -> {
+                            if (event.slim != null) {
+                                SkinManagerClient.setSlim(event.uuid, event.slim);
+                            }
+                            boolean isClearEvent = event.url == null || event.url.isBlank() || event.id == null || event.id.isBlank();
+                            if (isClearEvent) {
+                                SkinManagerClient.clearTexture(event.uuid);
+                            } else {
+                                SkinManagerClient.forceFetch(event.uuid);
+                            }
+                        });
+                    }
+                }
+            }
+
+            @Override
+            public void onToast(String toastType, String uuidStr, String title) {
+                // Handle toast notifications (e.g., skin upload confirmation)
+                MinecraftClient mc = MinecraftClient.getInstance();
+                if (mc != null && title != null && !title.isBlank()) {
+                    try {
+                        UUID uuid = uuidStr != null && !uuidStr.isBlank() ? UUID.fromString(uuidStr) : null;
+                        mc.execute(() -> {
+                            Toasts.info(
+                                Text.translatable("toast.catskinc.event.title"),
+                                Text.literal(title));
+                        });
+                    } catch (Exception ignored) {}
+                }
+            }
+        };
+
+        wsClient = WebSocketClient.builder()
+                .baseUrl(wsBaseUrl)
+                .requestSigningKey(signingKey)
+                .listener(listener)
+                .build();
+
+        // Get session token for local player before connecting
+        MinecraftClient mc = MinecraftClient.getInstance();
+        UUID localUuid = null;
+        if (mc != null && mc.player != null) {
+            localUuid = mc.player.getUuid();
+            try {
+                String token = acquireSessionTokenAsync(localUuid).join();
+                if (token != null && !token.isBlank()) {
+                    wsClient.setSessionToken(token);
+                    ModLog.debug("Session token set on WebSocket client for {}", localUuid);
+                }
+            } catch (Exception ex) {
+                ModLog.warn("Failed to acquire session token for WebSocket: {}", ex.getMessage());
+            }
+        }
+
+        // Subscribe to local player UUID after successful connection
+        if (localUuid != null) {
+            wsClient.setLocalUuid(localUuid);
+        }
+
+        // Set SSE fallback for post-connect disconnects
+        wsClient.setOnDisconnectFallback(() -> {
+            ModLog.warn("WebSocket disconnected, falling back to SSE");
+            startSse(consumer);
+        });
+
+        wsClient.connect().whenComplete((v, ex) -> {
+            if (ex != null) {
+                ModLog.warn("WebSocket connection failed: {}", ex.getMessage());
+                if (!wsStop) {
+                    ModLog.debug("Falling back to SSE...");
+                    startSse(consumer);
+                }
+            }
+        });
+
+        ModLog.debug("WebSocket client started");
+    }
+
+    /**
+     * Stop WebSocket connection.
+     */
+    public static synchronized void stopWebSocket() {
+        wsStop = true;
+        WebSocketClient client = wsClient;
+        wsClient = null;
+        if (client != null) {
+            client.disconnect();
+        }
+        ModLog.debug("Stopping WebSocket client");
+    }
+
+    /**
+     * Check if WebSocket is currently connected.
+     */
+    public static boolean isWebSocketConnected() {
+        WebSocketClient client = wsClient;
+        return client != null && client.isConnected();
     }
 
     private static void invalidateSelectedCache(UUID uuid) {

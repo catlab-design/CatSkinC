@@ -114,6 +114,28 @@ public final class CatskincClient {
                     SkinManagerClient.clearAll();
                     SkinOverrideStore.clearAll();
                     ServerApiClient.stopSse();
+                    ServerApiClient.stopWebSocket();
+                    // Clear session token for local player on disconnect.
+                    if (player != null) {
+                        ServerApiClient.clearSessionToken(player.getUuid());
+                    }
+                    VoiceIntegrationBootstrap.shutdown();
+                });
+            }
+        });
+
+        ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client != null) {
+                if (player != null) {
+                    ModLog.info("Client quit detected: {}", player.getUuid());
+                } else {
+                    ModLog.info("Client quit detected (player unavailable)");
+                }
+                client.execute(() -> {
+                    SkinManagerClient.clearAll();
+                    SkinOverrideStore.clearAll();
+                    ServerApiClient.stopSse();
                     // Clear session token for local player on disconnect.
                     if (player != null) {
                         ServerApiClient.clearSessionToken(player.getUuid());
@@ -161,7 +183,7 @@ public final class CatskincClient {
     private static void handleJoin(MinecraftClient client) {
         try {
             VoiceIntegrationBootstrap.init();
-            ModLog.debug("Handling join flow: start SSE + initial sync");
+            ModLog.debug("Handling join flow: start WebSocket (v3) with SSE fallback + initial sync");
 
             // Pre-acquire session token for the local player so upload/select
             // does not have to wait for the auth round-trip when the UI opens.
@@ -176,9 +198,10 @@ public final class CatskincClient {
                 });
             }
 
-            ServerApiClient.startSse(event -> {
+            // Try WebSocket first (protocol v3), fall back to SSE on failure
+            ServerApiClient.startWebSocket(event -> {
                 if (event == null || event.uuid == null) {
-                    ModLog.trace("Skipping empty SSE event");
+                    ModLog.trace("Skipping empty WS event");
                     return;
                 }
                 client.execute(() -> {
