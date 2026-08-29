@@ -136,6 +136,9 @@ public final class ServerApiClient {
     /** Set to true when the server rejects us with 426 CLIENT_UPDATE_REQUIRED. */
     private static volatile boolean clientOutdated = false;
 
+    /** Connection mode selected by user. Defaults to AUTO (WS with SSE fallback). */
+    private static volatile ModConfig.ConnectionMode currentConnectionMode = ModConfig.ConnectionMode.AUTO;
+
     /**
      * Per-player session token cache.
      * Key: UUID string. Value: { token, expiry epoch ms }.
@@ -1020,9 +1023,15 @@ public final class ServerApiClient {
     /**
      * Start WebSocket connection for real-time skin updates.
      * Uses protocol version 3 (MIN_WS_PROTOCOL_VERSION on server).
-     * Falls back to SSE internally if WebSocket is unavailable.
+     * Falls back to SSE internally if WebSocket is unavailable (unless mode is WEBSOCKET).
      */
     public static synchronized void startWebSocket(Consumer<UpdateEvent> consumer) {
+        // Check if WebSocket is allowed for current mode
+        ModConfig.ConnectionMode mode = currentConnectionMode;
+        if (mode == ModConfig.ConnectionMode.SSE) {
+            ModLog.trace("WebSocket start skipped: mode is SSE only");
+            return;
+        }
         if (wsClient != null) {
             ModLog.trace("WebSocket start skipped: already running");
             return;
@@ -1042,7 +1051,7 @@ public final class ServerApiClient {
         WebSocketClient.Listener listener = new WebSocketClient.Listener() {
             @Override
             public void onOpen() {
-                ModLog.info("WebSocket connected");
+                ModLog.info("WebSocket connected (mode: {})", mode);
             }
 
             @Override
@@ -1126,23 +1135,34 @@ public final class ServerApiClient {
             wsClient.setLocalUuid(localUuid);
         }
 
-        // Set SSE fallback for post-connect disconnects
-        wsClient.setOnDisconnectFallback(() -> {
-            ModLog.warn("WebSocket disconnected, falling back to SSE");
-            startSse(consumer);
-        });
+        // Set SSE fallback for post-connect disconnects ONLY in AUTO mode
+        if (mode == ModConfig.ConnectionMode.AUTO) {
+            wsClient.setOnDisconnectFallback(() -> {
+                ModLog.warn("WebSocket disconnected, falling back to SSE");
+                startSse(consumer);
+            });
+        } else if (mode == ModConfig.ConnectionMode.WEBSOCKET) {
+            // In WEBSOCKET mode, no SSE fallback — just log and attempt reconnect
+            wsClient.setOnDisconnectFallback(() -> {
+                ModLog.warn("WebSocket disconnected (WEBSOCKET mode: no SSE fallback)");
+            });
+        }
 
         wsClient.connect().whenComplete((v, ex) -> {
             if (ex != null) {
                 ModLog.warn("WebSocket connection failed: {}", ex.getMessage());
                 if (!wsStop) {
-                    ModLog.debug("Falling back to SSE...");
-                    startSse(consumer);
+                    if (mode == ModConfig.ConnectionMode.AUTO) {
+                        ModLog.debug("Falling back to SSE...");
+                        startSse(consumer);
+                    } else {
+                        ModLog.warn("WEBSOCKET mode: not falling back to SSE");
+                    }
                 }
             }
         });
 
-        ModLog.debug("WebSocket client started");
+        ModLog.debug("WebSocket client started (mode: {})", mode);
     }
 
     /**
@@ -1164,6 +1184,50 @@ public final class ServerApiClient {
     public static boolean isWebSocketConnected() {
         WebSocketClient client = wsClient;
         return client != null && client.isConnected();
+    }
+
+    /**
+     * Get the currently active connection mode.
+     */
+    public static ModConfig.ConnectionMode getConnectionMode() {
+        return currentConnectionMode;
+    }
+
+    /**
+     * Set the connection mode and update behavior accordingly.
+     * Called when user changes mode in settings.
+     */
+    public static void setConnectionMode(ModConfig.ConnectionMode mode) {
+        currentConnectionMode = mode;
+        ModLog.info("Connection mode changed to: {}", mode);
+    }
+
+    /**
+     * Reconnect using the current mode and IP.
+     * Called when user clicks "Reload Server IP" or changes mode.
+     */
+    public static void reconnect(Consumer<UpdateEvent> consumer) {
+        // Stop existing connections
+        stopSse();
+        stopWebSocket();
+
+        // Reconnect based on current mode
+        RuntimeConfig cfg = runtimeConfig();
+        String baseUrl = cfg.baseUrl;
+
+        ModLog.info("Reconnecting with mode: {}, baseUrl: {}", currentConnectionMode, baseUrl);
+
+        if (isClientOutdated()) {
+            ModLog.warn("Reconnect skipped: client outdated (server requires update)");
+            return;
+        }
+
+        switch (currentConnectionMode) {
+            case WEBSOCKET -> startWebSocket(consumer);
+            case SSE -> startSse(consumer);
+            case AUTO -> startWebSocket(consumer); // WS with fallback handled internally
+            default -> startWebSocket(consumer);
+        }
     }
 
     private static void invalidateSelectedCache(UUID uuid) {

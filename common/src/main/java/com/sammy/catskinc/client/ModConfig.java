@@ -19,6 +19,15 @@ public final class ModConfig {
     private boolean showErrorToast = true;
     private String requestSigningKey = null;
 
+    // Connection mode: AUTO (WS with SSE fallback), WEBSOCKET (force WS), SSE (force SSE)
+    private ConnectionMode connectionMode = ConnectionMode.AUTO;
+
+    public enum ConnectionMode {
+        AUTO,       // Try WebSocket first, fallback to SSE on failure
+        WEBSOCKET,  // Force WebSocket (protocol v3), no fallback
+        SSE         // Force SSE (protocol v2) only
+    }
+
     private static ModConfig instance = new ModConfig();
 
     private ModConfig() {}
@@ -109,6 +118,14 @@ public final class ModConfig {
 
     public void setRequestSigningKey(String requestSigningKey) {
         this.requestSigningKey = requestSigningKey;
+    }
+
+    public ConnectionMode getConnectionMode() {
+        return connectionMode;
+    }
+
+    public void setConnectionMode(ConnectionMode connectionMode) {
+        this.connectionMode = connectionMode;
     }
 }
 
