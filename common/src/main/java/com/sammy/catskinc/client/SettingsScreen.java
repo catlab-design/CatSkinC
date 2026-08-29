@@ -37,6 +37,7 @@ public final class SettingsScreen extends Screen {
 
     private final List<SettingItem> settings = List.of(
         new SettingItem("catskinCloudIp", "CatSkinCloud IP", "General"),
+        new SettingItem("connectionMode", "Connection Mode", "General"),
         new SettingItem("showConnectionToast", "Connection Toast", "Toasts"),
         new SettingItem("showUploadToast", "Upload Toast", "Toasts"),
         new SettingItem("showInfoToast", "Info Toast", "Toasts"),
@@ -92,7 +93,7 @@ public final class SettingsScreen extends Screen {
         this.searchBox.setResponder(value -> this.searchQuery = value);
         this.addRenderableWidget(this.searchBox);
 
-        this.ipEditBox = new EditBox(this.font, this.panelX + 120, this.panelY + 52, this.panelW - 180, 16, Component.literal("CatSkinCloud IP"));
+        this.ipEditBox = new EditBox(this.font, this.panelX + 120, this.panelY + 52, this.panelW - 220, 16, Component.literal("CatSkinCloud IP"));
         this.ipEditBox.setMaxLength(128);
         this.ipEditBox.setValue(ModConfig.get().getCatskinCloudIp());
         this.ipEditBox.setResponder(value -> {
@@ -100,6 +101,17 @@ public final class SettingsScreen extends Screen {
             ModConfig.save();
         });
         this.addRenderableWidget(this.ipEditBox);
+
+        // Reload IP button next to IP field
+        net.minecraft.client.gui.components.Button reloadButton = net.minecraft.client.gui.components.Button.builder(
+                Component.literal("↻"), button -> {
+            ModSounds.playClick();
+            ServerApiClient.reconnect(event -> {});
+            Toasts.info(
+                Component.translatable("toast.catskinc.event.title"),
+                Component.translatable("toast.catskinc.reconnecting"));
+        }).bounds(this.panelX + this.panelW - 80, this.panelY + 52, 70, 16).build();
+        this.addRenderableWidget(reloadButton);
     }
 
     @Override
@@ -180,15 +192,38 @@ public final class SettingsScreen extends Screen {
                         hasIpSetting = true;
                         this.ipEditBox.setX(this.panelX + 120);
                         this.ipEditBox.setY(y);
-                        this.ipEditBox.setWidth(this.panelW - 180);
+                        this.ipEditBox.setWidth(this.panelW - 220);
                         this.ipEditBox.visible = true;
 
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+                    } else if (item.key.equals("connectionMode")) {
+                        // Connection Mode dropdown
+                        drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        ModConfig.ConnectionMode mode = ModConfig.get().getConnectionMode();
+                        String[] modeLabels = {"Auto", "WebSocket", "SSE (REST+SSE)"};
+                        int modeIndex = mode.ordinal();
+                        String currentLabel = modeLabels[modeIndex];
+
+                        int dropdownX = rightOffset - 145;
+                        int dropdownW = 100;
+                        int dropdownH = 16;
+                        boolean hover = mouseX >= dropdownX && mouseX < dropdownX + dropdownW && mouseY >= y && mouseY < y + dropdownH;
+                        int bg = hover ? 0x55444444 : 0x3D232323;
+                        int border = hover ? 1922734746 : 1670023818;
+                        drawContext.fill(dropdownX, y, dropdownX + dropdownW, y + 16, bg);
+                        drawContext.fill(dropdownX, y, dropdownX + dropdownW, y + 1, border);
+                        drawContext.fill(dropdownX, y + 15, dropdownX + dropdownW, y + 16, border);
+                        drawContext.fill(dropdownX, y + 1, dropdownX + 1, y + 15, border);
+                        drawContext.fill(dropdownX + dropdownW - 1, y + 1, dropdownX + dropdownW, y + 15, border);
+                        int textW = this.font.width(currentLabel);
+                        drawContext.drawString(this.font, Component.literal(currentLabel), dropdownX + (dropdownW - textW) / 2, y + 4, -1);
+                        // Draw dropdown arrow
+                        drawContext.drawString(this.font, Component.literal("▼"), dropdownX + dropdownW - 16, y + 4, -1);
                     } else {
                         boolean val = getSettingValue(item.key);
-                        drawToggleSettingRow(drawContext, mouseX, mouseY, y, item.label, 
-                                val ? "ON" : "OFF", this.panelX + 25, rightOffset, 
+                        drawToggleSettingRow(drawContext, mouseX, mouseY, y, item.label,
+                                val ? "ON" : "OFF", this.panelX + 25, rightOffset,
                                 () -> toggleSetting(item.key),
                                 () -> resetSetting(item.key));
                     }
@@ -321,6 +356,26 @@ public final class SettingsScreen extends Screen {
                                 ModSounds.playClick();
                                 config.setCatskinCloudIp("storage-api.catskin.space");
                                 this.ipEditBox.setValue("storage-api.catskin.space");
+                                saveAndApply();
+                                return true;
+                            }
+                        } else if (item.key.equals("connectionMode")) {
+                            int dropdownX = rightOffset - 145;
+                            int dropdownW = 100;
+                            int dropdownH = 16;
+                            if (mouseX >= dropdownX && mouseX < dropdownX + dropdownW && mouseY >= y && mouseY < y + dropdownH) {
+                                ModSounds.playClick();
+                                // Cycle through connection modes
+                                ModConfig.ConnectionMode currentMode = config.getConnectionMode();
+                                ModConfig.ConnectionMode nextMode;
+                                switch (currentMode) {
+                                    case AUTO -> nextMode = ModConfig.ConnectionMode.WEBSOCKET;
+                                    case WEBSOCKET -> nextMode = ModConfig.ConnectionMode.SSE;
+                                    case SSE -> nextMode = ModConfig.ConnectionMode.AUTO;
+                                    default -> nextMode = ModConfig.ConnectionMode.AUTO;
+                                }
+                                config.setConnectionMode(nextMode);
+                                ServerApiClient.setConnectionMode(nextMode);
                                 saveAndApply();
                                 return true;
                             }
