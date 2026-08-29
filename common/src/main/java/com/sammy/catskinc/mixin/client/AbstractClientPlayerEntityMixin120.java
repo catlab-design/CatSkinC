@@ -1,5 +1,6 @@
 package com.sammy.catskinc.mixin.client;
 
+import com.sammy.catskinc.client.PlayerSkinOverrideResolver;
 import com.sammy.catskinc.client.SkinManagerClient;
 import com.sammy.catskinc.client.SkinOverrideStore;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
@@ -25,16 +26,9 @@ public abstract class AbstractClientPlayerEntityMixin120 {
         Identifier original = cir.getReturnValue();
 
         SkinManagerClient.onSkinLookup(uuid, original);
-
-        SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
-        if (entry != null) {
-            cir.setReturnValue(entry.texture);
-            return;
-        }
-
-        Identifier id = SkinManagerClient.getOrFetch(self);
-        if (id != null) {
-            cir.setReturnValue(id);
+        Identifier override = PlayerSkinOverrideResolver.resolveTexture(uuid);
+        if (override != null) {
+            cir.setReturnValue(override);
         }
     }
 
@@ -46,12 +40,12 @@ public abstract class AbstractClientPlayerEntityMixin120 {
     )
     private void Catskinc$overrideModel(CallbackInfoReturnable<String> cir) {
         UUID uuid = ((AbstractClientPlayerEntity) (Object) this).getUuid();
+        Boolean slim = SkinManagerClient.isSlimOrNull(uuid);
         SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
         if (entry != null) {
             cir.setReturnValue(entry.slim ? "slim" : "default");
             return;
         }
-        Boolean slim = SkinManagerClient.isSlimOrNull(uuid);
         if (slim != null) {
             cir.setReturnValue(slim.booleanValue() ? "slim" : "default");
         }

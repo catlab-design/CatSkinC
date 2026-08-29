@@ -1,8 +1,8 @@
 package com.sammy.catskinc.mixin.client;
 
 import com.mojang.authlib.GameProfile;
+import com.sammy.catskinc.client.PlayerSkinOverrideResolver;
 import com.sammy.catskinc.client.SkinManagerClient;
-import com.sammy.catskinc.client.SkinOverrideStore;
 import net.minecraft.client.texture.PlayerSkinProvider;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,19 +26,12 @@ public abstract class SkinManagerMixin {
             return;
         }
 
-        SkinOverrideStore.Entry entry = SkinOverrideStore.get(uuid);
-        if (entry != null) {
-            cir.setReturnValue(entry.texture);
-            return;
-        }
-
-        Identifier cached = SkinManagerClient.getCached(uuid);
-        if (cached != null) {
-            cir.setReturnValue(cached);
+        Identifier override = PlayerSkinOverrideResolver.resolveTexture(uuid);
+        if (override != null) {
+            cir.setReturnValue(override);
             return;
         }
 
         SkinManagerClient.ensureFetch(uuid);
     }
 }
-

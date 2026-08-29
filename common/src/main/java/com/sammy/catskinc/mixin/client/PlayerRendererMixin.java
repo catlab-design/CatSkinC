@@ -1,5 +1,6 @@
 package com.sammy.catskinc.mixin.client;
 
+import com.sammy.catskinc.client.PlayerSkinOverrideResolver;
 import com.sammy.catskinc.client.SkinManagerClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
@@ -23,7 +24,7 @@ public abstract class PlayerRendererMixin {
         if (player == null) {
             return;
         }
-        Identifier id = SkinManagerClient.getOrFetch(player);
+        Identifier id = PlayerSkinOverrideResolver.resolveTexture(player.getUuid());
         if (id != null) {
             cir.setReturnValue(id);
         }

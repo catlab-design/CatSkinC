@@ -30,6 +30,8 @@ public final class SkinManagerClient {
     private static final Map<UUID, NativeImage> ORIGINAL_PIXELS = new ConcurrentHashMap<>();
     private static final Set<UUID> FALLBACK_TEXTURES = ConcurrentHashMap.newKeySet();
 
+    private static final Map<UUID, NativeImageBackedTexture> SHARED_DYNAMIC_TEXTURE = new ConcurrentHashMap<>();
+
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
     private static final Map<UUID, Long> FAST_RETRY_SCHEDULED = new ConcurrentHashMap<>();
@@ -72,9 +74,15 @@ public final class SkinManagerClient {
         }
         Identifier rendered = resolveRenderTexture(uuid);
         if (rendered == null) {
-            fetchAndApplyFor(uuid);
+            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+            long now = System.currentTimeMillis();
+            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                FAST_RETRY_SCHEDULED.put(uuid, now);
+                fetchAndApplyFor(uuid);
+            }
             return null;
         }
+        FAST_RETRY_SCHEDULED.remove(uuid);
         if (shouldPoll(uuid)) {
             fetchAndApplyFor(uuid);
         }
@@ -90,7 +98,16 @@ public final class SkinManagerClient {
             return;
         }
         if (!SKIN_IMAGES.containsKey(uuid) || shouldPoll(uuid)) {
-            fetchAndApplyFor(uuid);
+            if (!SKIN_IMAGES.containsKey(uuid)) {
+                Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+                long now = System.currentTimeMillis();
+                if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                    FAST_RETRY_SCHEDULED.put(uuid, now);
+                    fetchAndApplyFor(uuid);
+                }
+            } else {
+                fetchAndApplyFor(uuid);
+            }
         }
     }
 
@@ -111,7 +128,16 @@ public final class SkinManagerClient {
             return;
         }
         LAST_CHECK.remove(uuid);
-        fetchAndApplyFor(uuid);
+        if (!SKIN_IMAGES.containsKey(uuid)) {
+            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+            long now = System.currentTimeMillis();
+            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                FAST_RETRY_SCHEDULED.put(uuid, now);
+                fetchAndApplyFor(uuid);
+            }
+        } else {
+            fetchAndApplyFor(uuid);
+        }
     }
 
     public static void refresh(UUID uuid) {
@@ -122,7 +148,16 @@ public final class SkinManagerClient {
         destroyTextures(MinecraftClient.getInstance(), uuid);
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
-        fetchAndApplyFor(uuid);
+        if (!SKIN_IMAGES.containsKey(uuid)) {
+            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+            long now = System.currentTimeMillis();
+            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                FAST_RETRY_SCHEDULED.put(uuid, now);
+                fetchAndApplyFor(uuid);
+            }
+        } else {
+            fetchAndApplyFor(uuid);
+        }
     }
 
     public static void fetchAndApplyFor(UUID uuid) {
@@ -175,17 +210,11 @@ public final class SkinManagerClient {
                 ModLog.error("Skin apply failed for uuid=" + uuid, throwable);
                 return;
             }
-            // Only update LAST_CHECK when there was an actual update to avoid poll blackout
-            if (images != null) {
-                LAST_CHECK.put(uuid, System.currentTimeMillis());
-            } else if (!LAST_SKIN_URL.containsKey(uuid)) {
-                // No skin cached at all: schedule fast-retry in 2s
-                scheduleFastRetry(uuid);
-            }
             if (images == null) {
                 ModLog.trace("No texture update for {}", uuid);
                 return;
             }
+            LAST_CHECK.put(uuid, System.currentTimeMillis());
 
             MinecraftClient client = MinecraftClient.getInstance();
             if (client == null) {
@@ -275,6 +304,7 @@ public final class SkinManagerClient {
         }
         FALLBACK_TEXTURES.clear();
         VANILLA_TEXTURES.clear();
+        SHARED_DYNAMIC_TEXTURE.clear();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
 
@@ -488,20 +518,6 @@ public final class SkinManagerClient {
         }
     }
 
-    private static void scheduleFastRetry(UUID uuid) {
-        if (uuid == null || FAST_RETRY_SCHEDULED.containsKey(uuid)) return;
-        FAST_RETRY_SCHEDULED.put(uuid, System.currentTimeMillis());
-        EXECUTOR.submit(() -> {
-            try {
-                Thread.sleep(FAST_RETRY_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            FAST_RETRY_SCHEDULED.remove(uuid);
-            fetchAndApplyFor(uuid);
-        });
-    }
-
     private static void closeQuietly(NativeImage image) {
         if (image == null) {
             return;
@@ -533,6 +549,7 @@ public final class SkinManagerClient {
         VANILLA_TEXTURES.clear();
         FALLBACK_TEXTURES.clear();
         ORIGINAL_PIXELS.clear();
+        SHARED_DYNAMIC_TEXTURE.clear();
     }
 
     private record DownloadedImages(

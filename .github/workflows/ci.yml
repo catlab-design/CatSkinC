@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - master
+      - 1.21.1
   pull_request:
     branches:
       - main
       - master
+      - 1.21.1
 
 permissions:
   contents: read
