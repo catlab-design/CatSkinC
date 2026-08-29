@@ -2,6 +2,39 @@
 
 All notable changes to this project should be documented in this file.
 
+## [4.0.0] - 2026-08-29
+
+### Added
+
+- **WebSocket client** using native `java.net.http.WebSocket` (Java 11+) for high-performance real-time skin sync.
+- **Automatic protocol negotiation** — client sends `x-catskinc-protocol: 3` header on WebSocket handshake.
+- **Resilient connection management**:
+  - Exponential backoff reconnection (1.5s → 60s max).
+  - Shared circuit breaker across REST, SSE, and WebSocket (unified failure tracking).
+  - Automatic fallback to SSE when WebSocket fails or protocol is unsupported.
+- **Session-token authentication** on WebSocket with auto-subscription to local player UUID.
+- **Protocol version verification** in welcome message — closes connection on mismatch.
+- **In-game toast notifications** for WebSocket-originated events (skin updates, server messages).
+
+### Changed
+
+- **Join flow** now attempts WebSocket first, falls back to SSE on failure.
+- **Shared circuit breaker state** between `ServerApiClient` and `WebSocketClient` — REST/SSE/WS failures all contribute to the same breaker.
+- **Heartbeat handling** — application-level JSON ping/pong (30s) replaces binary WebSocket ping frames for consistency.
+
+### Fixed
+
+- **Broadcast framing** — WebSocket clients now receive raw JSON (SSE `data: ` prefix stripped server-side).
+- **Handshake protocol header** — added `X-CatSkinC-Protocol` to WebSocket upgrade request.
+- **Auth race** — session token acquired synchronously before WebSocket connection attempt.
+- **Protocol defense** — client verifies `protocol_version` in welcome message, closes on mismatch.
+- **Fallback trigger** — SSE fallback now activates on abnormal post-connect disconnections, not just initial connect failure.
+- **Toast handler** — implemented proper `Toasts.info()` with translatable titles.
+
+### Security
+
+- **Request signing** (HMAC-SHA256) applied to WebSocket upgrade request.
+
 ## [3.1.1] - 2026-07-21
 
 ### Fixed

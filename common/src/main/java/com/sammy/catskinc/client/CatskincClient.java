@@ -113,6 +113,7 @@ public final class CatskincClient {
                     SkinManagerClient.clearAll();
                     SkinOverrideStore.clearAll();
                     ServerApiClient.stopSse();
+                    ServerApiClient.stopWebSocket();
                     if (player != null) {
                         ServerApiClient.clearSessionToken(player.getUUID());
                     }
@@ -159,7 +160,7 @@ public final class CatskincClient {
     private static void handleJoin(Minecraft client) {
         try {
             VoiceIntegrationBootstrap.init();
-            ModLog.debug("Handling join flow: start SSE + initial sync");
+            ModLog.debug("Handling join flow: start WebSocket (v3) with SSE fallback + initial sync");
 
             if (client.player != null) {
                 java.util.UUID localUuid = client.player.getUUID();
@@ -172,9 +173,10 @@ public final class CatskincClient {
                 });
             }
 
-            ServerApiClient.startSse(event -> {
+            // Try WebSocket first (protocol v3), fall back to SSE on failure
+            ServerApiClient.startWebSocket(event -> {
                 if (event == null || event.uuid == null) {
-                    ModLog.trace("Skipping empty SSE event");
+                    ModLog.trace("Skipping empty WS event");
                     return;
                 }
                 client.execute(() -> {
@@ -184,7 +186,7 @@ public final class CatskincClient {
                     boolean isClearEvent = event.url == null || event.url.isBlank()
                             || event.id == null || event.id.isBlank();
                     if (isClearEvent) {
-                        ModLog.debug("SSE clear event for {}: removing skin caches", event.uuid);
+                        ModLog.debug("WS clear event for {}: removing skin caches", event.uuid);
                         SkinManagerClient.clearTexture(event.uuid);
                     } else {
                         SkinManagerClient.forceFetch(event.uuid);
