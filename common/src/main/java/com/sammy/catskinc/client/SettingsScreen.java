@@ -102,18 +102,12 @@ public final class SettingsScreen extends Screen {
             ModConfig.save();
         });
         this.addDrawableChild(this.ipTextField);
-
-        // Reload IP button next to IP field (stored for click handling)
-        this.reloadButtonX = this.panelX + this.panelW - 80;
-        this.reloadButtonY = this.panelY + 52;
-        this.reloadButtonW = 70;
-        this.reloadButtonH = 16;
     }
 
     private int reloadButtonX;
     private int reloadButtonY;
-    private int reloadButtonW;
-    private int reloadButtonH;
+    private int reloadButtonW = 40;
+    private int reloadButtonH = 16;
 
     @Override
     public void tick() {
@@ -369,17 +363,8 @@ public final class SettingsScreen extends Screen {
                     ModConfig config = ModConfig.get();
                     for (SettingItem item : categorySettings) {
                         if (item.key.equals("catskinCloudIp")) {
-                            int rowY = this.panelY + 48;
-                            // Calculate the actual y for this row item
-                            int itemIndex = 0;
-                            for (SettingItem si : categorySettings) {
-                                if (si.key.equals("catskinCloudIp")) break;
-                                itemIndex++;
-                            }
-                            rowY += 22 * itemIndex;
-
                             int resetX = rightOffset - 40;
-                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= rowY && mouseY < rowY + 16) {
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
                                 ModSounds.playClick();
                                 config.setCatskinCloudIp("storage-api.catskin.space");
                                 this.ipTextField.setText("storage-api.catskin.space");
@@ -387,7 +372,7 @@ public final class SettingsScreen extends Screen {
                                 return true;
                             }
                             // Reload button click
-                            if (mouseX >= this.reloadButtonX && mouseX < this.reloadButtonX + this.reloadButtonW && mouseY >= rowY && mouseY < rowY + 16) {
+                            if (mouseX >= this.reloadButtonX && mouseX < this.reloadButtonX + this.reloadButtonW && mouseY >= y && mouseY < y + 16) {
                                 ModSounds.playClick();
                                 ServerApiClient.reconnect(event -> {});
                                 Toasts.info(
