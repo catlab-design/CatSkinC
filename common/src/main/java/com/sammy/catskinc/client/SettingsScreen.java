@@ -374,10 +374,28 @@ public final class SettingsScreen extends Screen {
                             // Reload button click
                             if (mouseX >= this.reloadButtonX && mouseX < this.reloadButtonX + this.reloadButtonW && mouseY >= y && mouseY < y + 16) {
                                 ModSounds.playClick();
-                                ServerApiClient.reconnect(event -> {});
+                                // Show reconnecting toast immediately
                                 Toasts.info(
                                     Text.translatable("toast.catskinc.event.title"),
                                     Text.translatable("toast.catskinc.reconnecting"));
+                                // Show result toast after reconnect attempt
+                                ServerApiClient.reconnect(event -> {})
+                                    .whenComplete((connected, ex) -> {
+                                        MinecraftClient mc = MinecraftClient.getInstance();
+                                        if (mc != null) {
+                                            mc.execute(() -> {
+                                                if (Boolean.TRUE.equals(connected)) {
+                                                    Toasts.info(
+                                                        Text.translatable("toast.catskinc.event.title"),
+                                                        Text.translatable("toast.catskinc.connected"));
+                                                } else {
+                                                    Toasts.info(
+                                                        Text.translatable("toast.catskinc.event.title"),
+                                                        Text.translatable("toast.catskinc.failed"));
+                                                }
+                                            });
+                                        }
+                                    });
                                 return true;
                             }
                         } else if (item.key.equals("connectionMode")) {
