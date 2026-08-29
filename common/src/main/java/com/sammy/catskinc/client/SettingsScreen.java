@@ -101,18 +101,12 @@ public final class SettingsScreen extends Screen {
             ModConfig.save();
         });
         this.addRenderableWidget(this.ipEditBox);
-
-        // Reload button position (stored for click handling)
-        this.reloadButtonX = 0;
-        this.reloadButtonY = 0;
-        this.reloadButtonW = 40;
-        this.reloadButtonH = 16;
     }
 
     private int reloadButtonX;
     private int reloadButtonY;
-    private int reloadButtonW;
-    private int reloadButtonH;
+    private int reloadButtonW = 40;
+    private int reloadButtonH = 16;
 
     @Override
     public void render(GuiGraphics drawContext, int mouseX, int mouseY, float delta) {
