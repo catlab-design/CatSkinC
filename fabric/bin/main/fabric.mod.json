@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "catskinc",
+  "version": "${version}",
+  "name": "CatSkinC",
+  "description": "Cloud skin upload and live sync for CatSkinC.",
+  "authors": [
+    "Team CatLab Design"
+  ],
+  "contact": {
+    "homepage": "https://dotpp.xyz"
+  },
+  "license": "GPL-3.0-or-later",
+  "icon": "assets/catskinc/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "main": [
+      "com.sammy.catskinc.fabric.CatskincFabric"
+    ],
+    "client": [
+      "com.sammy.catskinc.fabric.client.CatskincFabricClient"
+    ]
+  },
+  "mixins": [
+    "catskinc.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": "${fabric_loader_version_range}",
+    "minecraft": "${minecraft_version_range}",
+    "java": "${java_version_range}",
+    "architectury": "${architectury_version_range}",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "voicechat": "*",
+    "plasmovoice": "*",
+    "figura": "*",
+    "emotecraft": "*"
+  }
+}
+

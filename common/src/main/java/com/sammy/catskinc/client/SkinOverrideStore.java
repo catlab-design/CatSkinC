@@ -3,6 +3,7 @@ package com.sammy.catskinc.client;
 import com.mojang.blaze3d.platform.NativeImage;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,12 +53,14 @@ public final class SkinOverrideStore {
         if (vanillaId == null) {
             return;
         }
+        // Managed entries write directly into the vanilla texture (via injectPixels)
+        // and store the vanilla texture ID. They don't own a separate texture.
         SkinManagerClient.injectPixels(uuid, image);
         clear(uuid);
         ENTRIES.put(uuid, new Entry(vanillaId, slim, true));
     }
 
-    public static void putManagedFromFile(UUID uuid, File png, boolean slim) throws Exception {
+    public static void putManagedFromFile(UUID uuid, File png, boolean slim) throws IOException {
         try (FileInputStream in = new FileInputStream(png)) {
             NativeImage image = NativeImage.read(in);
             putManaged(uuid, image, slim);
@@ -72,6 +75,9 @@ public final class SkinOverrideStore {
         if (removed == null) {
             return;
         }
+        // Non-managed entries own their texture and must be destroyed.
+        // Managed entries use the vanilla texture ID (from VANILLA_TEXTURES) which
+        // is shared and must NOT be destroyed here.
         if (!removed.managed) {
             Minecraft client = Minecraft.getInstance();
             if (client != null) {

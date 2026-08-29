@@ -96,7 +96,16 @@ public final class SkinManagerClient {
             return;
         }
         if (!SKIN_IMAGES.containsKey(uuid) || shouldPoll(uuid)) {
-            fetchAndApplyFor(uuid);
+            if (!SKIN_IMAGES.containsKey(uuid)) {
+                Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+                long now = System.currentTimeMillis();
+                if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                    FAST_RETRY_SCHEDULED.put(uuid, now);
+                    fetchAndApplyFor(uuid);
+                }
+            } else {
+                fetchAndApplyFor(uuid);
+            }
         }
     }
 
@@ -117,7 +126,16 @@ public final class SkinManagerClient {
             return;
         }
         LAST_CHECK.remove(uuid);
-        fetchAndApplyFor(uuid);
+        if (!SKIN_IMAGES.containsKey(uuid)) {
+            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+            long now = System.currentTimeMillis();
+            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                FAST_RETRY_SCHEDULED.put(uuid, now);
+                fetchAndApplyFor(uuid);
+            }
+        } else {
+            fetchAndApplyFor(uuid);
+        }
     }
 
     public static void refresh(UUID uuid) {
@@ -128,7 +146,16 @@ public final class SkinManagerClient {
         destroyTextures(Minecraft.getInstance(), uuid);
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
-        fetchAndApplyFor(uuid);
+        if (!SKIN_IMAGES.containsKey(uuid)) {
+            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
+            long now = System.currentTimeMillis();
+            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
+                FAST_RETRY_SCHEDULED.put(uuid, now);
+                fetchAndApplyFor(uuid);
+            }
+        } else {
+            fetchAndApplyFor(uuid);
+        }
     }
 
     public static void fetchAndApplyFor(UUID uuid) {
