@@ -103,16 +103,17 @@ public final class SettingsScreen extends Screen {
         });
         this.addDrawableChild(this.ipTextField);
 
-        // Reload IP button next to IP field
-        ButtonWidget reloadButton = ButtonWidget.builder(Text.literal("↻"), button -> {
-            ModSounds.playClick();
-            ServerApiClient.reconnect(event -> {});
-            Toasts.info(
-                Text.translatable("toast.catskinc.event.title"),
-                Text.translatable("toast.catskinc.reconnecting"));
-        }).dimensions(this.panelX + this.panelW - 80, this.panelY + 52, 70, 16).build();
-        this.addDrawableChild(reloadButton);
+        // Reload IP button next to IP field (stored for click handling)
+        this.reloadButtonX = this.panelX + this.panelW - 80;
+        this.reloadButtonY = this.panelY + 52;
+        this.reloadButtonW = 70;
+        this.reloadButtonH = 16;
     }
+
+    private int reloadButtonX;
+    private int reloadButtonY;
+    private int reloadButtonW;
+    private int reloadButtonH;
 
     @Override
     public void tick() {
@@ -207,6 +208,13 @@ public final class SettingsScreen extends Screen {
 
                         drawContext.drawTextWithShadow(this.textRenderer, Text.literal(item.label), this.panelX + 25, y + 4, -1);
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+
+                        // Reload button next to IP field - same style as Reset button
+                        this.reloadButtonX = rightOffset - 85;
+                        this.reloadButtonY = y;
+                        this.reloadButtonW = 40;
+                        this.reloadButtonH = 16;
+                        drawRowButton(drawContext, mouseX, mouseY, this.reloadButtonX, y, this.reloadButtonW, this.reloadButtonH, "↻");
                     } else if (item.key.equals("connectionMode")) {
                         // Connection Mode dropdown
                         drawContext.drawTextWithShadow(this.textRenderer, Text.literal(item.label), this.panelX + 25, y + 4, -1);
@@ -361,12 +369,30 @@ public final class SettingsScreen extends Screen {
                     ModConfig config = ModConfig.get();
                     for (SettingItem item : categorySettings) {
                         if (item.key.equals("catskinCloudIp")) {
+                            int rowY = this.panelY + 48;
+                            // Calculate the actual y for this row item
+                            int itemIndex = 0;
+                            for (SettingItem si : categorySettings) {
+                                if (si.key.equals("catskinCloudIp")) break;
+                                itemIndex++;
+                            }
+                            rowY += 22 * itemIndex;
+
                             int resetX = rightOffset - 40;
-                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= rowY && mouseY < rowY + 16) {
                                 ModSounds.playClick();
                                 config.setCatskinCloudIp("storage-api.catskin.space");
                                 this.ipTextField.setText("storage-api.catskin.space");
                                 saveAndApply();
+                                return true;
+                            }
+                            // Reload button click
+                            if (mouseX >= this.reloadButtonX && mouseX < this.reloadButtonX + this.reloadButtonW && mouseY >= rowY && mouseY < rowY + 16) {
+                                ModSounds.playClick();
+                                ServerApiClient.reconnect(event -> {});
+                                Toasts.info(
+                                    Text.translatable("toast.catskinc.event.title"),
+                                    Text.translatable("toast.catskinc.reconnecting"));
                                 return true;
                             }
                         } else if (item.key.equals("connectionMode")) {

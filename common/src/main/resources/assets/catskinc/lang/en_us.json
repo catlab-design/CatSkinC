@@ -58,6 +58,9 @@
   "toast.catskinc.outdated.title": "Mod update required",
   "toast.catskinc.outdated.message": "This CatSkinC version is no longer supported. Please update the mod.",
 
+  "toast.catskinc.event.title": "CatSkinC Event",
+  "toast.catskinc.reconnecting": "Reconnecting...",
+
   "toast.error.not_png": "File must be a .png",
   "toast.error.drag_not_png": "Dragged file is not a .png",
   "toast.error.read_failed": "Failed to read file",
