@@ -57,6 +57,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
+import java.awt.Desktop;
+import java.net.URI;
+
 public final class SkinUploadScreen
 extends Screen {
     private static final UUID PREVIEW_SLIM_UUID = findPreviewProfileUuid(true, "catskinc-preview-slim");
@@ -347,6 +350,8 @@ extends Screen {
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Library", this.leftW - 20)), this.leftX + 10, this.leftY + 9, -1381654);
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Live Preview", this.centerW - 20)), this.centerX + 10, this.centerY + 9, -1381654);
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Controls", this.rightW - 20)), this.rightX + 10, this.rightY + 9, -1381654);
+        // Render branding links in top‑right corner
+        this.renderBrandingLinks(drawContext, n, n2);
         this.renderPreviewArea(drawContext, n, n2);
         this.renderInfoBar(drawContext);
         this.renderSkinSlots(drawContext, n, n2);
@@ -403,6 +408,21 @@ extends Screen {
             if (this.isInside(n2, n3, centerX + 5, 6, 80, 18)) {
                 ModSounds.playClick();
                 net.minecraft.client.Minecraft.getInstance().setScreen(new SettingsScreen());
+                return true;
+            }
+            // Branding links in top‑right corner
+            final int HUD_X = this.width - 140;
+            final int HUD_Y = 15;
+            final int HUD_W = 130;
+            final int HUD_H = 18;
+            if (this.isInside(n2, n3, HUD_X, HUD_Y, HUD_W, HUD_H)) {
+                ModSounds.playClick();
+                this.runBrowserAction("https://catlabdesign.space");
+                return true;
+            }
+            if (this.isInside(n2, n3, HUD_X, HUD_Y + 20, HUD_W, HUD_H)) {
+                ModSounds.playClick();
+                this.runBrowserAction("https://youtube.com/@CL9CC");
                 return true;
             }
             if (this.isInside(n2, n3, this.dropX, this.dropY, this.dropW, this.dropH)) {
@@ -1478,6 +1498,42 @@ extends Screen {
         int n9 = Math.round((float)n2 * f3);
         drawContext.drawCenteredString(this.font, (Component)Component.literal((String)string2), n8, n9, n4);
         drawContext.pose().popPose();
+    }
+
+    /** Renders the Cat Lab / YouTube branding links in the top‑right corner. */
+    private void renderBrandingLinks(GuiGraphics drawContext, int mouseX, int mouseY) {
+        final int HUD_X = this.width - 140;
+        final int HUD_Y = 15;
+        final int HUD_W = 130;
+        final int HUD_H = 18;
+
+        // Line 1: "Cat Lab_ 9Creations" → opens https://catlabdesign.space
+        boolean hoverBrand = this.isInside(mouseX, mouseY, HUD_X, HUD_Y, HUD_W, HUD_H);
+        int brandColor = hoverBrand ? -1 : -1;
+        drawContext.drawString(this.font,
+            Component.literal("Cat Lab_ 9Creations"),
+            HUD_X, HUD_Y, brandColor);
+
+        // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
+        int youtubeY = HUD_Y + 20;
+        boolean hoverYouTube = this.isInside(mouseX, mouseY, HUD_X, youtubeY, HUD_W, HUD_H);
+        MutableComponent youtubeText = Component.literal("Follow us on ")
+            .append(Component.literal("YouTube").withStyle(net.minecraft.ChatFormatting.RED));
+        drawContext.drawString(this.font, youtubeText, HUD_X, youtubeY, -1);
+    }
+
+    /** Opens a URL in the system default browser. */
+    private void runBrowserAction(String url) {
+        try {
+            URI uri = new URI(url);
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                Desktop.getDesktop().browse(uri);
+            } else {
+                new Thread(() -> {
+                    try { Desktop.getDesktop().browse(uri); } catch (Exception ignored) {}
+                }).start();
+            }
+        } catch (Exception ignored) {}
     }
 
     private File historyDir() {
