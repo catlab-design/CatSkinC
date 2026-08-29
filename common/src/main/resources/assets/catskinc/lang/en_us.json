@@ -60,6 +60,8 @@
 
   "toast.catskinc.event.title": "CatSkinC Event",
   "toast.catskinc.reconnecting": "Reconnecting...",
+  "toast.catskinc.connected": "Connected!",
+  "toast.catskinc.failed": "Connection failed",
 
   "toast.error.not_png": "File must be a .png",
   "toast.error.drag_not_png": "Dragged file is not a .png",

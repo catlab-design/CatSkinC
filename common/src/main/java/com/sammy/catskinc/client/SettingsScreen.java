@@ -360,6 +360,33 @@ public final class SettingsScreen extends Screen {
                                 saveAndApply();
                                 return true;
                             }
+                            // Reload button click
+                            if (mouseX >= this.reloadButtonX && mouseX < this.reloadButtonX + this.reloadButtonW && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                // Show reconnecting toast immediately
+                                Toasts.info(
+                                    Component.translatable("toast.catskinc.event.title"),
+                                    Component.translatable("toast.catskinc.reconnecting"));
+                                // Show result toast after reconnect attempt
+                                ServerApiClient.reconnect(event -> {})
+                                    .whenComplete((connected, ex) -> {
+                                        Minecraft mc = Minecraft.getInstance();
+                                        if (mc != null) {
+                                            mc.execute(() -> {
+                                                if (Boolean.TRUE.equals(connected)) {
+                                                    Toasts.info(
+                                                        Component.translatable("toast.catskinc.event.title"),
+                                                        Component.translatable("toast.catskinc.connected"));
+                                                } else {
+                                                    Toasts.info(
+                                                        Component.translatable("toast.catskinc.event.title"),
+                                                        Component.translatable("toast.catskinc.failed"));
+                                                }
+                                            });
+                                        }
+                                    });
+                                return true;
+                            }
                         } else if (item.key.equals("connectionMode")) {
                             int dropdownX = rightOffset - 145;
                             int dropdownW = 100;

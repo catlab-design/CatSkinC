@@ -1189,13 +1189,13 @@ public final class ServerApiClient {
     /**
      * Reconnect using the current mode and IP.
      * Called when user clicks "Reload Server IP" or changes mode.
+     * Returns a Future that completes true on success, false on failure.
      */
-    public static void reconnect(Consumer<UpdateEvent> consumer) {
+    public static CompletableFuture<Boolean> reconnect(Consumer<UpdateEvent> consumer) {
         // Stop existing connections
         stopSse();
         stopWebSocket();
 
-        // Reconnect based on current mode
         RuntimeConfig cfg = runtimeConfig();
         String baseUrl = cfg.baseUrl;
 
@@ -1203,15 +1203,32 @@ public final class ServerApiClient {
 
         if (isClientOutdated()) {
             ModLog.warn("Reconnect skipped: client outdated (server requires update)");
-            return;
+            return CompletableFuture.completedFuture(false);
         }
 
-        switch (currentConnectionMode) {
-            case WEBSOCKET -> startWebSocket(consumer);
-            case SSE -> startSse(consumer);
-            case AUTO -> startWebSocket(consumer); // WS with fallback handled internally
-            default -> startWebSocket(consumer);
-        }
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+
+        // Start connection asynchronously
+        EXECUTOR.execute(() -> {
+            try {
+                switch (currentConnectionMode) {
+                    case WEBSOCKET -> startWebSocket(consumer);
+                    case SSE -> startSse(consumer);
+                    case AUTO -> startWebSocket(consumer); // WS with fallback handled internally
+                    default -> startWebSocket(consumer);
+                }
+                // Wait then check if connection is active
+                sleepQuietly(3000L);
+                boolean connected = isWebSocketConnected() || sseThread != null;
+                future.complete(connected);
+                ModLog.info("Reconnect check: connected={}", connected);
+            } catch (Exception ex) {
+                ModLog.warn("Reconnect failed: {}", ex.getMessage());
+                future.complete(false);
+            }
+        });
+
+        return future;
     }
 
     private static void invalidateSelectedCache(UUID uuid) {
