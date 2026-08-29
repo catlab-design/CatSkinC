@@ -415,12 +415,23 @@ extends Screen {
             final int HUD_Y = 15;
             final int HUD_W = 130;
             final int HUD_H = 18;
-            if (this.isInside(n2, n3, HUD_X, HUD_Y, HUD_W, HUD_H)) {
+            float titleScale = 0.8f;
+            int scaledBrandX = Math.round((float)HUD_X / titleScale);
+            int scaledBrandY = Math.round((float)HUD_Y / titleScale);
+            int scaledBrandW = Math.round((float)HUD_W / titleScale);
+            int scaledBrandH = Math.round((float)HUD_H / titleScale);
+            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), scaledBrandX, scaledBrandY, scaledBrandW, scaledBrandH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://catlabdesign.space");
                 return true;
             }
-            if (this.isInside(n2, n3, HUD_X, HUD_Y + 20, HUD_W, HUD_H)) {
+            float descScale = 0.7f;
+            int youtubeY = HUD_Y + 20;
+            int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+            int scaledYoutubeY = Math.round((float)youtubeY / descScale);
+            int scaledYoutubeW = Math.round((float)HUD_W / descScale);
+            int scaledYoutubeH = Math.round((float)HUD_H / descScale);
+            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://youtube.com/@CL9CC");
                 return true;
@@ -1508,18 +1519,42 @@ extends Screen {
         final int HUD_H = 18;
 
         // Line 1: "Cat Lab_ 9Creations" → opens https://catlabdesign.space
-        boolean hoverBrand = this.isInside(mouseX, mouseY, HUD_X, HUD_Y, HUD_W, HUD_H);
+        // Use same scale as title (0.8f)
+        float titleScale = 0.8f;
+        int scaledHudX = Math.round((float)HUD_X / titleScale);
+        int scaledHudY = Math.round((float)HUD_Y / titleScale);
+        int scaledW = Math.round((float)HUD_W / titleScale);
+        int scaledH = Math.round((float)HUD_H / titleScale);
+        boolean hoverBrand = this.isInside(
+            Math.round((float)mouseX / titleScale),
+            Math.round((float)mouseY / titleScale),
+            scaledHudX, scaledHudY, scaledW, scaledH);
         int brandColor = hoverBrand ? -1 : -1;
+        drawContext.pose().pushPose();
+        drawContext.pose().scale(titleScale, titleScale, 1.0f);
         drawContext.drawString(this.font,
             Component.literal("Cat Lab_ 9Creations"),
-            HUD_X, HUD_Y, brandColor);
+            scaledHudX, scaledHudY, brandColor);
+        drawContext.pose().popPose();
 
         // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
+        // Use same scale as subtitle (0.7f)
         int youtubeY = HUD_Y + 20;
-        boolean hoverYouTube = this.isInside(mouseX, mouseY, HUD_X, youtubeY, HUD_W, HUD_H);
+        float descScale = 0.7f;
+        int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+        int scaledYoutubeY = Math.round((float)youtubeY / descScale);
+        int scaledYoutubeW = Math.round((float)HUD_W / descScale);
+        int scaledYoutubeH = Math.round((float)HUD_H / descScale);
+        boolean hoverYouTube = this.isInside(
+            Math.round((float)mouseX / descScale),
+            Math.round((float)mouseY / descScale),
+            scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
         MutableComponent youtubeText = Component.literal("Follow us on ")
             .append(Component.literal("YouTube").withStyle(net.minecraft.ChatFormatting.RED));
-        drawContext.drawString(this.font, youtubeText, HUD_X, youtubeY, -1);
+        drawContext.pose().pushPose();
+        drawContext.pose().scale(descScale, descScale, 1.0f);
+        drawContext.drawString(this.font, youtubeText, scaledYoutubeX, scaledYoutubeY, -1);
+        drawContext.pose().popPose();
     }
 
     /** Opens a URL in the system default browser. */
