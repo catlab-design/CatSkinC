@@ -116,6 +116,9 @@ gradle-app.setting
 .gradletasknamecache
 
 **/build/
+**/common/bin/
+**/fabric/bin/
+**/neoforge/bin/
 
 # Common working directory
 run/
