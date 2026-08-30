@@ -363,24 +363,20 @@ public final class SettingsScreen extends Screen {
                             // Reload button click
                             if (mouseX >= this.reloadButtonX && mouseX < this.reloadButtonX + this.reloadButtonW && mouseY >= y && mouseY < y + 16) {
                                 ModSounds.playClick();
-                                // Show reconnecting toast immediately
-                                Toasts.info(
+                                // Show reconnecting toast immediately (uses ConnectionToast which plays sound on result)
+                                Toasts.ConnectionToast reconnectToast = Toasts.connection(
                                     Component.translatable("toast.catskinc.event.title"),
                                     Component.translatable("toast.catskinc.reconnecting"));
                                 // Show result toast after reconnect attempt
                                 ServerApiClient.reconnect(event -> {})
                                     .whenComplete((connected, ex) -> {
                                         Minecraft mc = Minecraft.getInstance();
-                                        if (mc != null) {
+                                        if (mc != null && reconnectToast != null) {
                                             mc.execute(() -> {
                                                 if (Boolean.TRUE.equals(connected)) {
-                                                    Toasts.info(
-                                                        Component.translatable("toast.catskinc.event.title"),
-                                                        Component.translatable("toast.catskinc.connected"));
+                                                    reconnectToast.complete(true, Component.translatable("toast.catskinc.connected").getString());
                                                 } else {
-                                                    Toasts.info(
-                                                        Component.translatable("toast.catskinc.event.title"),
-                                                        Component.translatable("toast.catskinc.failed"));
+                                                    reconnectToast.complete(false, Component.translatable("toast.catskinc.failed").getString());
                                                 }
                                             });
                                         }

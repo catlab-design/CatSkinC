@@ -410,29 +410,33 @@ extends Screen {
                 net.minecraft.client.Minecraft.getInstance().setScreen(new SettingsScreen());
                 return true;
             }
-            // Branding links in top‑right corner
+            // Branding links in top‑right corner (right-aligned hit detection)
             final int HUD_X = this.width - 140;
             final int titleY = this.leftY < 40 ? 8 : 10;
             final int HUD_Y = titleY;
             final int HUD_W = 130;
             final int HUD_H = 18;
             float titleScale = 0.8f;
-            int scaledBrandX = Math.round((float)HUD_X / titleScale);
+
+            // Title line hit box (right-aligned)
+            int brandTextWidth = this.font.width("Cat Lab_ 9Creations");
+            int brandRightX = Math.round((float)(HUD_X + HUD_W) / titleScale) - brandTextWidth;
             int scaledBrandY = Math.round((float)HUD_Y / titleScale);
-            int scaledBrandW = Math.round((float)HUD_W / titleScale);
             int scaledBrandH = Math.round((float)HUD_H / titleScale);
-            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), scaledBrandX, scaledBrandY, scaledBrandW, scaledBrandH)) {
+            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), brandRightX, scaledBrandY, brandTextWidth, scaledBrandH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://catlabdesign.space");
                 return true;
             }
+
+            // YouTube line hit box (right-aligned)
             float descScale = 0.7f;
             int youtubeY = scaledBrandY + Math.round(20.0f / titleScale);
-            int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+            int youtubeTextWidth = this.font.width("Follow us on YouTube");
+            int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
             int scaledYoutubeY = Math.round((float)youtubeY / descScale);
-            int scaledYoutubeW = Math.round((float)HUD_W / descScale);
             int scaledYoutubeH = Math.round((float)HUD_H / descScale);
-            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH)) {
+            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), youtubeRightX, scaledYoutubeY, youtubeTextWidth, scaledYoutubeH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://youtube.com/@CL9CC");
                 return true;
@@ -1512,7 +1516,7 @@ extends Screen {
         drawContext.pose().popPose();
     }
 
-    /** Renders the Cat Lab / YouTube branding links in the top‑right corner. */
+    /** Renders the Cat Lab / YouTube branding links in the top‑right corner (right‑aligned). */
     private void renderBrandingLinks(GuiGraphics drawContext, int mouseX, int mouseY, int titleY) {
         final int HUD_X = this.width - 140;
         final int HUD_Y = titleY;
@@ -1520,7 +1524,7 @@ extends Screen {
         final int HUD_H = 18;
 
         // Line 1: "Cat Lab_ 9Creations" → opens https://catlabdesign.space
-        // Use same scale as title (0.8f)
+        // Use same scale as title (0.8f) — right aligned to HUD_X + HUD_W
         float titleScale = 0.8f;
         int scaledHudX = Math.round((float)HUD_X / titleScale);
         int scaledHudY = Math.round((float)HUD_Y / titleScale);
@@ -1531,15 +1535,20 @@ extends Screen {
             Math.round((float)mouseY / titleScale),
             scaledHudX, scaledHudY, scaledW, scaledH);
         int brandColor = hoverBrand ? -1 : -1;
+
+        // Calculate right-aligned X for title line
+        int brandTextWidth = this.font.width("Cat Lab_ 9Creations");
+        int brandRightX = Math.round((float)(HUD_X + HUD_W) / titleScale) - brandTextWidth;
+
         drawContext.pose().pushPose();
         drawContext.pose().scale(titleScale, titleScale, 1.0f);
         drawContext.drawString(this.font,
             Component.literal("Cat Lab_ 9Creations"),
-            scaledHudX, scaledHudY, brandColor);
+            brandRightX, scaledHudY, brandColor);
         drawContext.pose().popPose();
 
         // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
-        // Use same scale as subtitle (0.7f)
+        // Use same scale as subtitle (0.7f) — right aligned to HUD_X + HUD_W
         int youtubeY = scaledHudY + Math.round(20.0f / titleScale);
         float descScale = 0.7f;
         int scaledYoutubeX = Math.round((float)HUD_X / descScale);
@@ -1550,11 +1559,15 @@ extends Screen {
             Math.round((float)mouseX / descScale),
             Math.round((float)mouseY / descScale),
             scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
+
         MutableComponent youtubeText = Component.literal("Follow us on ")
             .append(Component.literal("YouTube").withStyle(net.minecraft.ChatFormatting.RED));
+        int youtubeTextWidth = this.font.width("Follow us on YouTube");
+        int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
+
         drawContext.pose().pushPose();
         drawContext.pose().scale(descScale, descScale, 1.0f);
-        drawContext.drawString(this.font, youtubeText, scaledYoutubeX, scaledYoutubeY, -1);
+        drawContext.drawString(this.font, youtubeText, youtubeRightX, scaledYoutubeY, -1);
         drawContext.pose().popPose();
     }
 
