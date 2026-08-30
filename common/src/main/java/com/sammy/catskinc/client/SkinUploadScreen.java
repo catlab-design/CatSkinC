@@ -346,7 +346,7 @@ extends Screen {
         drawContext.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)this.ellipsis("Live Preview", this.centerW - 20)), this.centerX + 10, this.centerY + 9, -1381654);
         drawContext.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)this.ellipsis("Controls", this.rightW - 20)), this.rightX + 10, this.rightY + 9, -1381654);
         // Render branding links in top‑right corner
-        this.renderBrandingLinks(drawContext, n, n2, f);
+        this.renderBrandingLinks(drawContext, n, n2, f, titleY);
         this.renderPreviewArea(drawContext, n, n2);
         this.renderInfoBar(drawContext);
         this.renderSkinSlots(drawContext, n, n2);
@@ -405,28 +405,33 @@ extends Screen {
                 MinecraftClient.getInstance().setScreen(new SettingsScreen());
                 return true;
             }
-            // Branding links in top‑right corner
+            // Branding links in top‑right corner (right-aligned hit detection)
             final int HUD_X = this.width - 140;
-            final int HUD_Y = 15;
+            final int titleY = this.leftY < 40 ? 8 : 10;
+            final int HUD_Y = titleY;
             final int HUD_W = 130;
             final int HUD_H = 18;
             float titleScale = 0.8f;
-            int scaledBrandX = Math.round((float)HUD_X / titleScale);
+
+            // Title line hit box (right-aligned)
+            int brandTextWidth = this.textRenderer.getWidth("Cat Lab_ 9Creations");
+            int brandRightX = Math.round((float)(HUD_X + HUD_W) / titleScale) - brandTextWidth;
             int scaledBrandY = Math.round((float)HUD_Y / titleScale);
-            int scaledBrandW = Math.round((float)HUD_W / titleScale);
             int scaledBrandH = Math.round((float)HUD_H / titleScale);
-            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), scaledBrandX, scaledBrandY, scaledBrandW, scaledBrandH)) {
+            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), brandRightX, scaledBrandY, brandTextWidth, scaledBrandH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://catlabdesign.space");
                 return true;
             }
+
+            // YouTube line hit box (right-aligned)
             float descScale = 0.7f;
-            int youtubeY = HUD_Y + 20;
-            int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+            int youtubeY = scaledBrandY + Math.round(20.0f / titleScale);
+            int youtubeTextWidth = this.textRenderer.getWidth("Follow us on YouTube");
+            int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
             int scaledYoutubeY = Math.round((float)youtubeY / descScale);
-            int scaledYoutubeW = Math.round((float)HUD_W / descScale);
             int scaledYoutubeH = Math.round((float)HUD_H / descScale);
-            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH)) {
+            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), youtubeRightX, scaledYoutubeY, youtubeTextWidth, scaledYoutubeH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://youtube.com/@CL9CC");
                 return true;
@@ -1487,15 +1492,15 @@ extends Screen {
         drawContext.getMatrices().pop();
     }
 
-    /** Renders the Cat Lab / YouTube branding links in the top‑right corner. */
-    private void renderBrandingLinks(DrawContext drawContext, int mouseX, int mouseY, float delta) {
+    /** Renders the Cat Lab / YouTube branding links in the top‑right corner (right‑aligned). */
+    private void renderBrandingLinks(DrawContext drawContext, int mouseX, int mouseY, float delta, int titleY) {
         final int HUD_X = this.width - 140;
-        final int HUD_Y = 15;
+        final int HUD_Y = titleY;
         final int HUD_W = 130;
         final int HUD_H = 18;
 
         // Line 1: "Cat Lab_ 9Creations" → opens https://catlabdesign.space
-        // Use same scale as title (0.8f)
+        // Use same scale as title (0.8f) — right aligned to HUD_X + HUD_W
         float titleScale = 0.8f;
         int scaledHudX = Math.round((float)HUD_X / titleScale);
         int scaledHudY = Math.round((float)HUD_Y / titleScale);
@@ -1506,16 +1511,21 @@ extends Screen {
             Math.round((float)mouseY / titleScale),
             scaledHudX, scaledHudY, scaledW, scaledH);
         int brandColor = hoverBrand ? -1 : -1;
+
+        // Calculate right-aligned X for title line
+        int brandTextWidth = this.textRenderer.getWidth("Cat Lab_ 9Creations");
+        int brandRightX = Math.round((float)(HUD_X + HUD_W) / titleScale) - brandTextWidth;
+
         drawContext.getMatrices().push();
         drawContext.getMatrices().scale(titleScale, titleScale, 1.0f);
         drawContext.drawTextWithShadow(this.textRenderer,
             Text.literal("Cat Lab_ 9Creations"),
-            scaledHudX, scaledHudY, brandColor);
+            brandRightX, scaledHudY, brandColor);
         drawContext.getMatrices().pop();
 
         // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
-        // Use same scale as subtitle (0.7f)
-        int youtubeY = HUD_Y + 20;
+        // Use same scale as subtitle (0.7f) — right aligned to HUD_X + HUD_W
+        int youtubeY = scaledHudY + Math.round(20.0f / titleScale);
         float descScale = 0.7f;
         int scaledYoutubeX = Math.round((float)HUD_X / descScale);
         int scaledYoutubeY = Math.round((float)youtubeY / descScale);
@@ -1525,10 +1535,14 @@ extends Screen {
             Math.round((float)mouseX / descScale),
             Math.round((float)mouseY / descScale),
             scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
+
         MutableText youtubeText = Text.literal("Follow us on ").append(Text.literal("YouTube").formatted(net.minecraft.util.Formatting.RED));
+        int youtubeTextWidth = this.textRenderer.getWidth("Follow us on YouTube");
+        int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
+
         drawContext.getMatrices().push();
         drawContext.getMatrices().scale(descScale, descScale, 1.0f);
-        drawContext.drawTextWithShadow(this.textRenderer, youtubeText, scaledYoutubeX, scaledYoutubeY, -1);
+        drawContext.drawTextWithShadow(this.textRenderer, youtubeText, youtubeRightX, scaledYoutubeY, -1);
         drawContext.getMatrices().pop();
     }
 
