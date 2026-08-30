@@ -142,8 +142,10 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return;
         }
-        restorePixels(uuid);
-        destroyTextures(Minecraft.getInstance(), uuid);
+        if (!SkinOverrideStore.isManaged(uuid)) {
+            restorePixels(uuid);
+            destroyTextures(Minecraft.getInstance(), uuid);
+        }
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
         if (!SKIN_IMAGES.containsKey(uuid)) {

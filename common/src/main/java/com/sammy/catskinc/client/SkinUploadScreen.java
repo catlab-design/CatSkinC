@@ -351,7 +351,7 @@ extends Screen {
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Live Preview", this.centerW - 20)), this.centerX + 10, this.centerY + 9, -1381654);
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Controls", this.rightW - 20)), this.rightX + 10, this.rightY + 9, -1381654);
         // Render branding links in top‑right corner
-        this.renderBrandingLinks(drawContext, n, n2);
+        this.renderBrandingLinks(drawContext, n, n2, titleY);
         this.renderPreviewArea(drawContext, n, n2);
         this.renderInfoBar(drawContext);
         this.renderSkinSlots(drawContext, n, n2);
@@ -412,7 +412,8 @@ extends Screen {
             }
             // Branding links in top‑right corner
             final int HUD_X = this.width - 140;
-            final int HUD_Y = 15;
+            final int titleY = this.leftY < 40 ? 8 : 10;
+            final int HUD_Y = titleY;
             final int HUD_W = 130;
             final int HUD_H = 18;
             float titleScale = 0.8f;
@@ -426,7 +427,7 @@ extends Screen {
                 return true;
             }
             float descScale = 0.7f;
-            int youtubeY = HUD_Y + 20;
+            int youtubeY = scaledBrandY + Math.round(20.0f / titleScale);
             int scaledYoutubeX = Math.round((float)HUD_X / descScale);
             int scaledYoutubeY = Math.round((float)youtubeY / descScale);
             int scaledYoutubeW = Math.round((float)HUD_W / descScale);
@@ -1512,9 +1513,9 @@ extends Screen {
     }
 
     /** Renders the Cat Lab / YouTube branding links in the top‑right corner. */
-    private void renderBrandingLinks(GuiGraphics drawContext, int mouseX, int mouseY) {
+    private void renderBrandingLinks(GuiGraphics drawContext, int mouseX, int mouseY, int titleY) {
         final int HUD_X = this.width - 140;
-        final int HUD_Y = 15;
+        final int HUD_Y = titleY;
         final int HUD_W = 130;
         final int HUD_H = 18;
 
@@ -1539,7 +1540,7 @@ extends Screen {
 
         // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
         // Use same scale as subtitle (0.7f)
-        int youtubeY = HUD_Y + 20;
+        int youtubeY = scaledHudY + Math.round(20.0f / titleScale);
         float descScale = 0.7f;
         int scaledYoutubeX = Math.round((float)HUD_X / descScale);
         int scaledYoutubeY = Math.round((float)youtubeY / descScale);
