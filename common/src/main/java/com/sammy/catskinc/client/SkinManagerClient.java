@@ -402,21 +402,43 @@ public final class SkinManagerClient {
         int sh = source.getHeight();
         int tw = target.getWidth();
         int th = target.getHeight();
-        int w = Math.min(sw, tw);
-        int h = Math.min(sh, th);
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                target.setColor(x, y, source.getColor(x, y));
+        if (sw == tw && sh == th) {
+            // Same dimensions - direct copy
+            for (int y = 0; y < th; y++) {
+                for (int x = 0; x < tw; x++) {
+                    target.setColor(x, y, source.getColor(x, y));
+                }
             }
+            return;
         }
-        for (int y = h; y < th; y++) {
+        if (sw < tw || sh < th) {
+            // Source is smaller - only the top-left min region has data, rest transparent
+            int w = Math.min(sw, tw);
+            int h = Math.min(sh, th);
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    target.setColor(x, y, source.getColor(x, y));
+                }
+            }
+            for (int y = h; y < th; y++) {
+                for (int x = 0; x < tw; x++) {
+                    target.setColor(x, y, 0);
+                }
+            }
+            for (int y = 0; y < h; y++) {
+                for (int x = w; x < tw; x++) {
+                    target.setColor(x, y, 0);
+                }
+            }
+            return;
+        }
+        // Source is larger - need to scale down to target dimensions
+        // Use nearest-neighbor sampling (pixel-perfect for power-of-2 downscale)
+        for (int y = 0; y < th; y++) {
+            int sy = Math.min(sh - 1, (y * sh) / th);
             for (int x = 0; x < tw; x++) {
-                target.setColor(x, y, 0);
-            }
-        }
-        for (int y = 0; y < h; y++) {
-            for (int x = w; x < tw; x++) {
-                target.setColor(x, y, 0);
+                int sx = Math.min(sw - 1, (x * sw) / tw);
+                target.setColor(x, y, source.getColor(sx, sy));
             }
         }
     }
