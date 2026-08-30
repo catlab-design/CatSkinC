@@ -282,10 +282,9 @@ public final class WebSocketClient {
                     listener.onToast(toastType, uuid, title);
                 }
                 case "ping" -> {
-                    // Server heartbeat ping - respond with pong
-                    JsonObject pongMsg = new JsonObject();
-                    pongMsg.addProperty("type", "pong");
-                    sendMessage(ws, pongMsg.toString());
+                    // Server heartbeat ping - acknowledge internally, don't send pong
+                    // Server only accepts auth, subscribe, ping from clients
+                    ModLog.trace("WS ping received from server");
                 }
                 case "pong" -> {
                     // Heartbeat response from server (if server sends pong)

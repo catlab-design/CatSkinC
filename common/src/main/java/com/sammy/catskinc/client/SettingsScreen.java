@@ -18,6 +18,7 @@ public final class SettingsScreen extends Screen {
 
     private EditBox searchBox;
     private EditBox ipEditBox;
+    private EditBox requestSigningKeyEditBox;
     private String searchQuery = "";
     
     private boolean generalExpanded = true;
@@ -38,6 +39,7 @@ public final class SettingsScreen extends Screen {
     private final List<SettingItem> settings = List.of(
         new SettingItem("catskinCloudIp", "CatSkinCloud IP", "General"),
         new SettingItem("connectionMode", "Connection Mode", "General"),
+        new SettingItem("requestSigningKey", "Request Signing Key", "General"),
         new SettingItem("showConnectionToast", "Connection Toast", "Toasts"),
         new SettingItem("showUploadToast", "Upload Toast", "Toasts"),
         new SettingItem("showInfoToast", "Info Toast", "Toasts"),
@@ -101,12 +103,22 @@ public final class SettingsScreen extends Screen {
             ModConfig.save();
         });
         this.addRenderableWidget(this.ipEditBox);
+
+        this.requestSigningKeyEditBox = new EditBox(this.font, this.panelX + 120, this.panelY + 52, this.panelW - 220, 16, Component.literal("Request Signing Key"));
+        this.requestSigningKeyEditBox.setMaxLength(256);
+        this.requestSigningKeyEditBox.setValue(ModConfig.get().getRequestSigningKey() != null ? ModConfig.get().getRequestSigningKey() : "");
+        this.requestSigningKeyEditBox.setResponder(value -> {
+            ModConfig.get().setRequestSigningKey(value.isEmpty() ? null : value);
+            ModConfig.save();
+        });
+        this.addRenderableWidget(this.requestSigningKeyEditBox);
     }
 
     private int reloadButtonX;
     private int reloadButtonY;
     private int reloadButtonW = 40;
     private int reloadButtonH = 16;
+    private boolean hasRequestSigningKeySetting = false;
 
     @Override
     public void render(GuiGraphics drawContext, int mouseX, int mouseY, float delta) {
@@ -221,6 +233,15 @@ public final class SettingsScreen extends Screen {
                         drawContext.drawString(this.font, Component.literal(currentLabel), dropdownX + (dropdownW - textW) / 2, y + 4, -1);
                         // Draw dropdown arrow
                         drawContext.drawString(this.font, Component.literal("▼"), dropdownX + dropdownW - 16, y + 4, -1);
+                    } else if (item.key.equals("requestSigningKey")) {
+                        hasRequestSigningKeySetting = true;
+                        this.requestSigningKeyEditBox.setX(this.panelX + 120);
+                        this.requestSigningKeyEditBox.setY(y);
+                        this.requestSigningKeyEditBox.setWidth(this.panelW - 220);
+                        this.requestSigningKeyEditBox.visible = true;
+
+                        drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
                     } else {
                         boolean val = getSettingValue(item.key);
                         drawToggleSettingRow(drawContext, mouseX, mouseY, y, item.label,
@@ -235,6 +256,10 @@ public final class SettingsScreen extends Screen {
 
         if (!hasIpSetting) {
             this.ipEditBox.visible = false;
+        }
+
+        if (!hasRequestSigningKeySetting) {
+            this.requestSigningKeyEditBox.visible = false;
         }
 
         // Render widgets (searchBox, ipEditBox)
@@ -401,6 +426,15 @@ public final class SettingsScreen extends Screen {
                                 config.setConnectionMode(nextMode);
                                 ServerApiClient.setConnectionMode(nextMode);
                                 saveAndApply();
+                                return true;
+                            }
+                        } else if (item.key.equals("requestSigningKey")) {
+                            int resetX = rightOffset - 40;
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                config.setRequestSigningKey(null);
+                                this.requestSigningKeyEditBox.setValue("");
+                                ModConfig.save();
                                 return true;
                             }
                         } else {
