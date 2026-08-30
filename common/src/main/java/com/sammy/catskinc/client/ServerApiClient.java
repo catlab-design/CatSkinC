@@ -22,6 +22,8 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -111,6 +113,14 @@ public final class ServerApiClient {
     private static final long DEFAULT_PING_CACHE_TTL_MS = 10_000L;
     private static final int DEFAULT_MAX_JSON_BYTES = 256 * 1024;
     private static final int DEFAULT_MAX_IMAGE_BYTES = 64 * 1024 * 1024; // 64 MB for high-res skins (1024x+, 2048x+, etc.)
+
+    // Headers that may contain sensitive data and should not be logged
+    private static final Set<String> SENSITIVE_HEADERS = Set.of(
+            "authorization", "set-cookie", "cookie", "x-csrf-token", "x-api-key",
+            "proxy-authorization", "www-authenticate", "x-amz-security-token",
+            "x-catskinc-signature", "x-catskinc-timestamp", "x-catskinc-nonce",
+            "x-catskinc-content-sha256", "x-catskinc-request-id"
+    );
     private static final boolean DEFAULT_ALLOW_INSECURE_HTTP = false;
     private static final String DEFAULT_REQUEST_SIGNING_KEY = "";
     private static final String DEFAULT_TLS_PIN_SHA256 = "";
@@ -786,7 +796,12 @@ public final class ServerApiClient {
                 String requestId = newRequestId();
                 ModLog.trace("Downloading texture from {}", urlOrPath);
                 String downloadUrl = signDownloadUrl(urlOrPath, cfg);
-                ModLog.debug("Texture download request: url={}, signed={}", urlOrPath, !downloadUrl.equals(urlOrPath));
+                String safeUrl = downloadUrl;
+                try {
+                    URI uri = new URI(downloadUrl);
+                    safeUrl = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, null).toString();
+                } catch (URISyntaxException ignored) {}
+                ModLog.debug("Texture download request: url={}, signed={}", safeUrl, !downloadUrl.equals(urlOrPath));
                 connection = open("GET", downloadUrl, null, SHA256_EMPTY_HEX, requestId, false);
                 int code = responseCode(connection, requestId);
                 if (code == 426) {
@@ -794,10 +809,21 @@ public final class ServerApiClient {
                     return null;
                 }
                 if (code / 100 != 2) {
-                    ModLog.warn("Texture download failed: code={}, url={}, signedUrl={}", code, urlOrPath, downloadUrl);
-                    // Log response headers for debugging auth issues
+                    ModLog.warn("Texture download failed: code={}, url={}, signedUrl={}", code, urlOrPath, safeUrl);
+                    // Log response headers with sensitive headers redacted
                     for (String key : connection.getHeaderFields().keySet()) {
-                        ModLog.trace("  Header: {} = {}", key, connection.getHeaderFields().get(key));
+                        if (key != null) {
+                            String lowerKey = key.toLowerCase(Locale.ROOT);
+                            boolean isSensitive = SENSITIVE_HEADERS.contains(lowerKey) ||
+                                    lowerKey.contains("token") || lowerKey.contains("secret") ||
+                                    lowerKey.contains("key") || lowerKey.contains("auth") ||
+                                    lowerKey.contains("credential");
+                            if (!isSensitive) {
+                                ModLog.trace("  Header: {} = {}", key, connection.getHeaderFields().get(key));
+                            } else {
+                                ModLog.trace("  Header: {} = [REDACTED]", key);
+                            }
+                        }
                     }
                     return null;
                 }
