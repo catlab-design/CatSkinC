@@ -108,7 +108,7 @@ public final class ServerApiClient {
     private static final long DEFAULT_SELECTED_CACHE_TTL_MS = 1_500L;
     private static final long DEFAULT_PING_CACHE_TTL_MS = 10_000L;
     private static final int DEFAULT_MAX_JSON_BYTES = 256 * 1024;
-    private static final int DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+    private static final int DEFAULT_MAX_IMAGE_BYTES = 64 * 1024 * 1024; // 64 MB for high-res skins (1024x+, 2048x+, etc.)
     private static final boolean DEFAULT_ALLOW_INSECURE_HTTP = false;
     private static final String DEFAULT_REQUEST_SIGNING_KEY = "";
     private static final String DEFAULT_TLS_PIN_SHA256 = "";
@@ -770,6 +770,7 @@ public final class ServerApiClient {
                 String requestId = newRequestId();
                 ModLog.trace("Downloading texture from {}", urlOrPath);
                 String downloadUrl = signDownloadUrl(urlOrPath, cfg);
+                ModLog.debug("Texture download request: url={}, signed={}", urlOrPath, !downloadUrl.equals(urlOrPath));
                 connection = open("GET", downloadUrl, null, SHA256_EMPTY_HEX, requestId, false);
                 int code = responseCode(connection, requestId);
                 if (code == 426) {
@@ -777,7 +778,11 @@ public final class ServerApiClient {
                     return null;
                 }
                 if (code / 100 != 2) {
-                    ModLog.warn("Texture download failed: code={}, url={}", code, urlOrPath);
+                    ModLog.warn("Texture download failed: code={}, url={}, signedUrl={}", code, urlOrPath, downloadUrl);
+                    // Log response headers for debugging auth issues
+                    for (String key : connection.getHeaderFields().keySet()) {
+                        ModLog.trace("  Header: {} = {}", key, connection.getHeaderFields().get(key));
+                    }
                     return null;
                 }
                 byte[] bodyBytes;
@@ -1875,7 +1880,7 @@ public final class ServerApiClient {
         }
         byte[] bytes = Files.readAllBytes(file.toPath());
         if (bytes.length > maxBytes) {
-            throw new IOException(label + " file is too large");
+            throw new IOException(label + " file is too large (max " + (maxBytes / 1024 / 1024) + " MB)");
         }
         return bytes;
     }
