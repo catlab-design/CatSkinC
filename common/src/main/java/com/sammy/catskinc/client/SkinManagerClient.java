@@ -32,6 +32,8 @@ public final class SkinManagerClient {
 
     private static final Map<UUID, NativeImageBackedTexture> SHARED_DYNAMIC_TEXTURE = new ConcurrentHashMap<>();
 
+    private static final Map<UUID, NativeImage> LAST_INJECTED_IMAGE = new ConcurrentHashMap<>();
+
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
     private static final Map<UUID, Long> FAST_RETRY_SCHEDULED = new ConcurrentHashMap<>();
@@ -233,13 +235,25 @@ public final class SkinManagerClient {
                     return;
                 }
 
-                NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
+                // Enforce maxSkinResolution config - downscale if needed
+                int maxRes = ModConfig.get().getMaxSkinResolution();
+                NativeImage skinImage = images.skinImage;
+                if (skinImage.getWidth() > maxRes || skinImage.getHeight() > maxRes) {
+                    ModLog.debug("Downscaling skin for {} from {}x{} to {}x{}",
+                            uuid, skinImage.getWidth(), skinImage.getHeight(), maxRes, maxRes);
+                    NativeImage downscaled = new NativeImage(maxRes, maxRes, true);
+                    blitPixels(downscaled, skinImage);
+                    skinImage.close();
+                    skinImage = downscaled;
+                }
+
+                NativeImage talkingImage = createOverlayImage(uuid, skinImage, images.mouthOpenImage,
                         "mouth-open");
                 if (images.mouthOpenRequested && talkingImage == null) {
                     ModLog.warn("Mouth-open texture missing after download for {}", uuid);
                 }
 
-                NativeImage previousSkin = SKIN_IMAGES.put(uuid, images.skinImage);
+                NativeImage previousSkin = SKIN_IMAGES.put(uuid, skinImage);
                 closeQuietly(previousSkin);
                 if (talkingImage != null) {
                     NativeImage previousTalking = TALKING_IMAGES.put(uuid, talkingImage);
@@ -314,6 +328,10 @@ public final class SkinManagerClient {
         if (uuid == null || source == null) {
             return;
         }
+        // Skip if this exact image object was already injected (cached in SKIN_IMAGES)
+        if (LAST_INJECTED_IMAGE.get(uuid) == source) {
+            return;
+        }
         Identifier vanillaId = VANILLA_TEXTURES.get(uuid);
         if (vanillaId == null) {
             return;
@@ -350,6 +368,7 @@ public final class SkinManagerClient {
             VANILLA_TEXTURES.put(uuid, fallbackId);
             FALLBACK_TEXTURES.add(uuid);
         }
+        LAST_INJECTED_IMAGE.put(uuid, source);
     }
 
     private static void restorePixels(UUID uuid) {
