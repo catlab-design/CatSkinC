@@ -351,7 +351,7 @@ extends Screen {
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Live Preview", this.centerW - 20)), this.centerX + 10, this.centerY + 9, -1381654);
         drawContext.drawString(this.font, (Component)Component.literal((String)this.ellipsis("Controls", this.rightW - 20)), this.rightX + 10, this.rightY + 9, -1381654);
         // Render branding links in top‑right corner
-        this.renderBrandingLinks(drawContext, n, n2, titleY);
+        this.renderBrandingLinks(drawContext, n, n2, titleY, subtitleY);
         this.renderPreviewArea(drawContext, n, n2);
         this.renderInfoBar(drawContext);
         this.renderSkinSlots(drawContext, n, n2);
@@ -1520,7 +1520,7 @@ extends Screen {
     }
 
     /** Renders the Cat Lab / YouTube branding links in the top‑right corner (right‑aligned). */
-    private void renderBrandingLinks(GuiGraphics drawContext, int mouseX, int mouseY, int titleY) {
+    private void renderBrandingLinks(GuiGraphics drawContext, int mouseX, int mouseY, int titleY, int subtitleY) {
         final int HUD_X = this.width - 140;
         final int HUD_Y = titleY;
         final int HUD_W = 130;
@@ -1552,26 +1552,29 @@ extends Screen {
 
         // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
         // Use same scale as subtitle (0.7f) — right aligned to HUD_X + HUD_W
-        int youtubeY = scaledHudY + Math.round(20.0f / titleScale);
-        float descScale = 0.7f;
-        int scaledYoutubeX = Math.round((float)HUD_X / descScale);
-        int scaledYoutubeY = Math.round((float)youtubeY / descScale);
-        int scaledYoutubeW = Math.round((float)HUD_W / descScale);
-        int scaledYoutubeH = Math.round((float)HUD_H / descScale);
-        boolean hoverYouTube = this.isInside(
-            Math.round((float)mouseX / descScale),
-            Math.round((float)mouseY / descScale),
-            scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
+        // Align with subtitle row when subtitle is visible
+        if (subtitleY != -999) {
+            float descScale = 0.7f;
+            int youtubeY = subtitleY;
+            int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+            int scaledYoutubeY = Math.round((float)youtubeY / descScale);
+            int scaledYoutubeW = Math.round((float)HUD_W / descScale);
+            int scaledYoutubeH = Math.round((float)HUD_H / descScale);
+            boolean hoverYouTube = this.isInside(
+                Math.round((float)mouseX / descScale),
+                Math.round((float)mouseY / descScale),
+                scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
 
-        MutableComponent youtubeText = Component.literal("Follow us on ")
-            .append(Component.literal("YouTube").withStyle(net.minecraft.ChatFormatting.RED));
-        int youtubeTextWidth = this.font.width("Follow us on YouTube");
-        int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
+            MutableComponent youtubeText = Component.literal("Follow us on ")
+                .append(Component.literal("YouTube").withStyle(net.minecraft.ChatFormatting.RED));
+            int youtubeTextWidth = this.font.width("Follow us on YouTube");
+            int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
 
-        drawContext.pose().pushPose();
-        drawContext.pose().scale(descScale, descScale, 1.0f);
-        drawContext.drawString(this.font, youtubeText, youtubeRightX, scaledYoutubeY, -1);
-        drawContext.pose().popPose();
+            drawContext.pose().pushPose();
+            drawContext.pose().scale(descScale, descScale, 1.0f);
+            drawContext.drawString(this.font, youtubeText, youtubeRightX, scaledYoutubeY, -1);
+            drawContext.pose().popPose();
+        }
     }
 
     /** Opens a URL in the system default browser. */
