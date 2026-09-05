@@ -52,6 +52,8 @@ public final class SkinManagerClient {
             return;
         }
         VANILLA_TEXTURES.putIfAbsent(uuid, vanillaId);
+        // Process any pending managed injection for this UUID
+        SkinOverrideStore.processPendingInjection(uuid, vanillaId);
     }
 
     static Identifier getVanillaIdentifier(UUID uuid) {
