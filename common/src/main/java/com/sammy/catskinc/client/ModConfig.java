@@ -18,6 +18,7 @@ public final class ModConfig {
     private boolean showInfoToast = true;
     private boolean showErrorToast = true;
     private String requestSigningKey = null;
+    private int maxSkinResolution = 8192; // Max allowed skin resolution (64-8192)
 
     // Connection mode: AUTO (WS with SSE fallback), WEBSOCKET (force WS), SSE (force SSE)
     private ConnectionMode connectionMode = ConnectionMode.AUTO;
@@ -126,6 +127,14 @@ public final class ModConfig {
 
     public void setConnectionMode(ConnectionMode connectionMode) {
         this.connectionMode = connectionMode;
+    }
+
+    public int getMaxSkinResolution() {
+        return Math.max(64, Math.min(maxSkinResolution, 8192));
+    }
+
+    public void setMaxSkinResolution(int maxSkinResolution) {
+        this.maxSkinResolution = Math.max(64, Math.min(maxSkinResolution, 8192));
     }
 }
 

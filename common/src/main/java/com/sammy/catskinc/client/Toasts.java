@@ -17,6 +17,7 @@ public final class Toasts {
 
     private static final int COLOR_TITLE = 0xFFFFE14A;
     private static final int COLOR_TITLE_ERROR = 0xFFFF6B6B;
+    private static final int COLOR_TITLE_WARNING = 0xFFFFAA00;
     private static final int COLOR_TEXT = 0xFFFFFFFF;
     private static final int COLOR_TEXT_DIM = 0xFFDDDDDD;
 
@@ -31,6 +32,11 @@ public final class Toasts {
     public static void error(Text title, Text description) {
         if (!ModConfig.get().isShowErrorToast()) return;
         MinecraftClient.getInstance().getToastManager().add(new SimpleToast(title, description, COLOR_TITLE_ERROR));
+    }
+
+    public static void warning(Text title, Text description) {
+        if (!ModConfig.get().isShowInfoToast()) return;
+        MinecraftClient.getInstance().getToastManager().add(new SimpleToast(title, description, COLOR_TITLE_WARNING));
     }
 
     public static UploadToast showUpload(Text title, Text subtitle) {

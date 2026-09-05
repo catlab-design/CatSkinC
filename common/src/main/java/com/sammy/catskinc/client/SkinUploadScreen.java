@@ -942,6 +942,9 @@ extends Screen {
             this.selectedFile = file2 = bl ? file : this.copyToHistory(file);
             this.selectedWidth = skinFileInfo.width;
             this.selectedHeight = skinFileInfo.height;
+            if (skinFileInfo.width > 4096) {
+                SkinUploadScreen.toastWarning("toast.warning.high_res_skin", new Object[0]);
+            }
             this.refreshPreviewTexture();
             ModLog.debug("Skin file selected: file='{}', size={}x{}, fromHistory={}", file2.getName(), skinFileInfo.width, skinFileInfo.height, bl);
             if (!bl) {
@@ -1646,12 +1649,12 @@ extends Screen {
     private static boolean isValidSize(int n, int n2) {
         boolean bl = n == n2;
         boolean bl2 = (n & n - 1) == 0;
-        boolean bl3 = n >= 64 && n <= 4096;
+        boolean bl3 = n >= 64 && n <= 8192;
         return bl && bl2 && bl3;
     }
 
     private static boolean isValidOverlaySize(int n, int n2) {
-        return n >= 8 && n2 >= 8 && n <= 4096 && n2 <= 4096;
+        return n >= 8 && n2 >= 8 && n <= 8192 && n2 <= 8192;
     }
 
     private static int scaled(int n, float f) {
@@ -1760,6 +1763,10 @@ extends Screen {
 
     private static void toastError(String string, Object ... objectArray) {
         Toasts.error((Text)Text.translatable((String)"title.skin_management"), (Text)Text.translatable((String)string, (Object[])objectArray));
+    }
+
+    private static void toastWarning(String string, Object ... objectArray) {
+        Toasts.warning((Text)Text.translatable((String)"title.skin_management"), (Text)Text.translatable((String)string, (Object[])objectArray));
     }
 
 
