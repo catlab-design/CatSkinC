@@ -24,7 +24,7 @@
   "screen.catskinc.slim_model": "Slim Model",
   "screen.catskinc.drop_hint": "[Drop skin/open/close PNG here]",
   "screen.catskinc.info.no_skin": "No skin selected",
-  "screen.catskinc.info.constraints": "PNG, square, power-of-two (64-4096)",
+  "screen.catskinc.info.constraints": "PNG, square, power-of-two (64-8192)",
   "screen.catskinc.info.select_skin_required": "เลือกไฟล์สกินก่อน จึงจะกดอัปโหลดได้",
   "screen.catskinc.info.mouth_none": "Mouth: none",
   "screen.catskinc.info.mouth_open_none": "Open: none",
@@ -66,6 +66,7 @@
   "toast.error.upload_requires_skin": "ต้องเลือกสกินก่อนอัปโหลด",
   "toast.error.mouth_requires_skin": "Select the base skin before selecting mouth PNG",
   "toast.error.mouth_size_mismatch": "Mouth PNG size must match selected skin",
+  "toast.warning.high_res_skin": "สกินความละเอียดสูง (>4096px) อาจทำให้ GPU VRAM น้อยมีปัญหาประสิทธิภาพ",
 
   "config.catskinc.title": "CatSkinC Settings",
   "config.catskinc.category.general": "General",

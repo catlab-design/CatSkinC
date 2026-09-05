@@ -945,6 +945,9 @@ extends Screen {
             this.selectedFile = file2 = bl ? file : this.copyToHistory(file);
             this.selectedWidth = skinFileInfo.width;
             this.selectedHeight = skinFileInfo.height;
+            if (skinFileInfo.width > 4096) {
+                SkinUploadScreen.toastWarning("toast.warning.high_res_skin", new Object[0]);
+            }
             this.refreshPreviewTexture();
             ModLog.debug("Skin file selected: file='{}', size={}x{}, fromHistory={}", file2.getName(), skinFileInfo.width, skinFileInfo.height, bl);
             if (!bl) {
@@ -1785,6 +1788,10 @@ extends Screen {
 
     private static void toastError(String string, Object ... objectArray) {
         Toasts.error((Component)Component.translatable((String)"title.skin_management"), (Component)Component.translatable((String)string, (Object[])objectArray));
+    }
+
+    private static void toastWarning(String string, Object ... objectArray) {
+        Toasts.warning((Component)Component.translatable((String)"title.skin_management"), (Component)Component.translatable((String)string, (Object[])objectArray));
     }
 
 

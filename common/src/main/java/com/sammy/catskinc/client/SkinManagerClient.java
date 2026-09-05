@@ -409,22 +409,13 @@ public final class SkinManagerClient {
             return;
         }
         if (sw < tw || sh < th) {
-            // Source is smaller - only the top-left min region has data, rest transparent
-            int w = Math.min(sw, tw);
-            int h = Math.min(sh, th);
-            for (int y = 0; y < h; y++) {
-                for (int x = 0; x < w; x++) {
-                    target.setPixelRGBA(x, y, source.getPixelRGBA(x, y));
-                }
-            }
-            for (int y = h; y < th; y++) {
+            // Source is smaller - need to scale up to target dimensions
+            // Use nearest-neighbor sampling (pixel-perfect for power-of-2 upscale)
+            for (int y = 0; y < th; y++) {
+                int sy = Math.min(sh - 1, (y * sh) / th);
                 for (int x = 0; x < tw; x++) {
-                    target.setPixelRGBA(x, y, 0);
-                }
-            }
-            for (int y = 0; y < h; y++) {
-                for (int x = w; x < tw; x++) {
-                    target.setPixelRGBA(x, y, 0);
+                    int sx = Math.min(sw - 1, (x * sw) / tw);
+                    target.setPixelRGBA(x, y, source.getPixelRGBA(sx, sy));
                 }
             }
             return;
