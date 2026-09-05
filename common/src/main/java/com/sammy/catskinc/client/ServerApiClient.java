@@ -110,7 +110,7 @@ public final class ServerApiClient {
     private static final long DEFAULT_SELECTED_CACHE_TTL_MS = 1_500L;
     private static final long DEFAULT_PING_CACHE_TTL_MS = 10_000L;
     private static final int DEFAULT_MAX_JSON_BYTES = 256 * 1024;
-    private static final int DEFAULT_MAX_IMAGE_BYTES = 1024 * 1024 * 1024; // 1 GB for 8192x8192 skins
+    private static final int DEFAULT_MAX_IMAGE_BYTES = 256 * 1024 * 1024; // 256 MB for high-res skins (4096x+)
 
     // Headers that may contain sensitive data and should not be logged
     private static final Set<String> SENSITIVE_HEADERS = Set.of(
