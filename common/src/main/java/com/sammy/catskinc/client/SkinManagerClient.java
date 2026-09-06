@@ -1,14 +1,19 @@
 package com.sammy.catskinc.client;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
@@ -30,14 +35,19 @@ public final class SkinManagerClient {
     private static final Map<UUID, NativeImage> ORIGINAL_PIXELS = new ConcurrentHashMap<>();
     private static final Set<UUID> FALLBACK_TEXTURES = ConcurrentHashMap.newKeySet();
 
-    private static final Map<UUID, NativeImage> LAST_INJECTED_IMAGE = new ConcurrentHashMap<>();
+    // Content-hash based injection cache (replaces object-reference LAST_INJECTED_IMAGE)
+    private static final ConcurrentMap<UUID, String> INJECTED_IMAGE_HASH = new ConcurrentHashMap<>();
 
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
     private static final Map<UUID, Long> FAST_RETRY_SCHEDULED = new ConcurrentHashMap<>();
 
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "CatSkinC-SkinManager");
+    // Separate executors: download pool (parallel) vs render prep pool (single-threaded)
+    private static final ExecutorService DOWNLOAD_EXECUTOR = new ThreadPoolExecutor(
+            4, 8, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
+            r -> { Thread t = new Thread(r, "CatSkinC-Download"); t.setDaemon(true); return t; });
+    private static final ExecutorService RENDER_PREP_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "CatSkinC-RenderPrep");
         thread.setDaemon(true);
         return thread;
     });
@@ -227,7 +237,14 @@ public final class SkinManagerClient {
                 closeQuietly(images.mouthOpenImage);
                 return;
             }
-            client.execute(() -> {
+            RENDER_PREP_EXECUTOR.execute(() -> {
+                Minecraft renderClient = Minecraft.getInstance();
+                if (renderClient == null) {
+                    ModLog.trace("Client not ready; dropping texture update for {}", uuid);
+                    closeQuietly(images.skinImage);
+                    closeQuietly(images.mouthOpenImage);
+                    return;
+                }
                 if (images.skinImage == null) {
                     ModLog.warn("Skin image download returned null for {}", uuid);
                     LAST_SKIN_URL.remove(uuid);
@@ -269,7 +286,7 @@ public final class SkinManagerClient {
 
                 ModLog.trace("Texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
             });
-        }, EXECUTOR);
+        }, DOWNLOAD_EXECUTOR);
     }
 
     public static Boolean isSlimOrNull(UUID uuid) {
@@ -308,6 +325,7 @@ public final class SkinManagerClient {
         LAST_MOUTH_OPEN_URL.clear();
         IN_FLIGHT.clear();
         FAST_RETRY_SCHEDULED.clear();
+        INJECTED_IMAGE_HASH.clear();
         restoreAllPixels();
         Minecraft client = Minecraft.getInstance();
         if (client != null) {
@@ -327,8 +345,9 @@ public final class SkinManagerClient {
         if (uuid == null || source == null) {
             return;
         }
-        // Skip if this exact image object was already injected (cached in SKIN_IMAGES)
-        if (LAST_INJECTED_IMAGE.get(uuid) == source) {
+        // Skip if content hash matches (avoids re-injecting unchanged skin every frame)
+        String hash = computeImageHash(source);
+        if (hash.equals(INJECTED_IMAGE_HASH.get(uuid))) {
             return;
         }
         ResourceLocation vanillaId = VANILLA_TEXTURES.get(uuid);
@@ -367,7 +386,25 @@ public final class SkinManagerClient {
             VANILLA_TEXTURES.put(uuid, fallbackId);
             FALLBACK_TEXTURES.add(uuid);
         }
-        LAST_INJECTED_IMAGE.put(uuid, source);
+        INJECTED_IMAGE_HASH.put(uuid, hash);
+    }
+
+    /**
+     * Computes a fast content hash of a NativeImage for change detection.
+     * Uses first/last rows + dimensions for speed (good enough for skin change detection).
+     */
+    private static String computeImageHash(NativeImage image) {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        long hash = w * 31L + h;
+        // Sample first row, middle row, last row
+        int[] rows = {0, h / 2, h - 1};
+        for (int row : rows) {
+            for (int x = 0; x < w; x += Math.max(1, w / 16)) { // Sample 16 points per row
+                hash = hash * 31 + image.getPixelRGBA(x, row);
+            }
+        }
+        return Long.toHexString(hash);
     }
 
     private static void restorePixels(UUID uuid) {
@@ -429,13 +466,18 @@ public final class SkinManagerClient {
             }
             return;
         }
+        // Pre-compute scale ratios to avoid division in inner loop
+        float xRatio = (float) sw / tw;
+        float yRatio = (float) sh / th;
+        int maxSx = sw - 1;
+        int maxSy = sh - 1;
         if (sw < tw || sh < th) {
             // Source is smaller - need to scale up to target dimensions
             // Use nearest-neighbor sampling (pixel-perfect for power-of-2 upscale)
             for (int y = 0; y < th; y++) {
-                int sy = Math.min(sh - 1, (y * sh) / th);
+                int sy = Math.min(maxSy, (int) (y * yRatio));
                 for (int x = 0; x < tw; x++) {
-                    int sx = Math.min(sw - 1, (x * sw) / tw);
+                    int sx = Math.min(maxSx, (int) (x * xRatio));
                     target.setPixelRGBA(x, y, source.getPixelRGBA(sx, sy));
                 }
             }
@@ -444,9 +486,9 @@ public final class SkinManagerClient {
         // Source is larger - need to scale down to target dimensions
         // Use nearest-neighbor sampling (pixel-perfect for power-of-2 downscale)
         for (int y = 0; y < th; y++) {
-            int sy = Math.min(sh - 1, (y * sh) / th);
+            int sy = Math.min(maxSy, (int) (y * yRatio));
             for (int x = 0; x < tw; x++) {
-                int sx = Math.min(sw - 1, (x * sw) / tw);
+                int sx = Math.min(maxSx, (int) (x * xRatio));
                 target.setPixelRGBA(x, y, source.getPixelRGBA(sx, sy));
             }
         }
@@ -576,6 +618,7 @@ public final class SkinManagerClient {
         IN_FLIGHT.clear();
         refreshIntervalMs = 5_000L;
         FAST_RETRY_SCHEDULED.clear();
+        INJECTED_IMAGE_HASH.clear();
         for (NativeImage image : ORIGINAL_PIXELS.values()) {
             closeQuietly(image);
         }

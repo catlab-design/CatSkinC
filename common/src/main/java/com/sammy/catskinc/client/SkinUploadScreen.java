@@ -186,10 +186,26 @@ extends Screen {
     }
 
     protected void init() {
-        int n;
-        int n2;
-        int n3;
+        calculateLayout();
+        this.clearWidgets();
+        this.loadHistory();
+        this.historyScroll = SkinUploadScreen.clamp(this.historyScroll, 0, this.maxHistoryScroll());
+        this.initSlimState();
+        this.rebuildPreviewPlayer();
+    }
+
+    public void resize(Minecraft minecraftClient, int n, int n2) {
+        super.resize(minecraftClient, n, n2);
+        // Only recalculate layout dimensions, don't reload history thumbnails
+        calculateLayout();
+    }
+
+    private void calculateLayout() {
+        // Layout calculation logic extracted from init()
         float f = 1.0F;
+        int layout_n;
+        int layout_n2;
+        int layout_n3;
         int n4 = SkinUploadScreen.scaled(12, f);
         int n5 = SkinUploadScreen.scaled(10, f);
         n4 = Math.min(n4, Math.max(6, this.width / 24));
@@ -209,16 +225,16 @@ extends Screen {
         int n14 = SkinUploadScreen.clamp(Math.round((float)n11 * 0.3f), n12, 250);
         int n15 = n11 - n14 * 2;
         if (n15 < n13) {
-            n3 = n13 - n15;
-            n14 = Math.max(n12, n14 - (n3 + 1) / 2);
+            int tmp_n3 = n13 - n15;
+            n14 = Math.max(n12, n14 - (tmp_n3 + 1) / 2);
             n15 = n11 - n14 * 2;
         }
         if (n15 < 140) {
             n15 = Math.max(140, n11 / 2);
             n14 = Math.max(64, (n11 - n15) / 2);
         }
-        n3 = n14 + n5 + n15 + n5 + n14;
-        this.leftX = n2 = n4 + Math.max(0, (n10 - n3) / 2);
+        int totalWidth = n14 + n5 + n15 + n5 + n14;
+        this.leftX = layout_n2 = n4 + Math.max(0, (n10 - totalWidth) / 2);
         this.leftY = n8;
         this.leftW = n14;
         this.leftH = n9;
@@ -246,8 +262,8 @@ extends Screen {
         this.dropH = this.infoY - this.dropY - SkinUploadScreen.scaled(6, f);
         int n19 = SkinUploadScreen.scaled(64, Math.min(f, 1.0f));
         if (this.dropH < n19) {
-            n = n19 - this.dropH;
-            this.infoH = Math.max(n16, this.infoH - n);
+            int dropDiff = n19 - this.dropH;
+            this.infoH = Math.max(n16, this.infoH - dropDiff);
             this.infoY = this.centerY + this.centerH - this.infoH;
             this.dropH = Math.max(36, this.infoY - this.dropY - SkinUploadScreen.scaled(6, f));
         }
@@ -256,11 +272,8 @@ extends Screen {
         this.historyW = this.leftW - 2;
         this.historyH = this.leftH - SkinUploadScreen.scaled(32, f);
         this.historyRowH = SkinUploadScreen.scaled(48, f);
-        this.clearWidgets();
-        this.loadHistory();
-        this.historyScroll = SkinUploadScreen.clamp(this.historyScroll, 0, this.maxHistoryScroll());
-        n = Math.min(n7, Math.max(8, this.rightW / 12));
-        int n20 = this.rightW - n * 2;
+        int btn_n = Math.min(n7, Math.max(8, this.rightW / 12));
+        int n20 = this.rightW - btn_n * 2;
         int n21 = SkinUploadScreen.scaled(22, f);
         int n22 = SkinUploadScreen.scaled(6, f);
         int n23 = SkinUploadScreen.scaled(20, f);
@@ -274,34 +287,27 @@ extends Screen {
             n22 = Math.max(2, Math.round((float)n22 * f2));
             n23 = Math.max(12, Math.round((float)n23 * f2));
         }
-        this.btnBrowseX = this.rightX + n;
+        this.btnBrowseX = this.rightX + btn_n;
         this.btnBrowseY = n24;
         this.btnBrowseW = n20;
         this.btnBrowseH = n21;
-        this.btnMouthOpenX = this.rightX + n;
+        this.btnMouthOpenX = this.rightX + btn_n;
         this.btnMouthOpenY = this.btnBrowseY + n21 + n22;
         this.btnMouthOpenW = n20;
         this.btnMouthOpenH = n21;
-        this.btnSlimX = this.rightX + n;
+        this.btnSlimX = this.rightX + btn_n;
         this.btnSlimY = this.btnMouthOpenY + n21 + n23;
         this.btnSlimW = n20;
         this.btnSlimH = n21;
-        this.btnUploadX = this.rightX + n;
+        this.btnUploadX = this.rightX + btn_n;
         this.btnUploadY = this.btnSlimY + n21 + n23;
         this.btnUploadW = n20;
         this.btnUploadH = n21;
-        this.btnClearX = this.rightX + n;
+        this.btnClearX = this.rightX + btn_n;
         this.btnClearY = this.btnUploadY + n21 + n22;
         this.btnClearW = n20;
         this.btnClearH = n21;
         this.layoutClearDialog(f, n4);
-        this.initSlimState();
-        this.rebuildPreviewPlayer();
-    }
-
-    public void resize(Minecraft minecraftClient, int n, int n2) {
-        super.resize(minecraftClient, n, n2);
-        this.init();
     }
 
     public void onClose() {

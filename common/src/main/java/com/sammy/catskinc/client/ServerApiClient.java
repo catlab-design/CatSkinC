@@ -811,34 +811,23 @@ public final class ServerApiClient {
                     }
                     return null;
                 }
-                byte[] bodyBytes;
-                try (InputStream in = connection.getInputStream()) {
-                    bodyBytes = readAllBytes(in, cfg.maxImageBytes);
-                }
                 String expectedHash = connection.getHeaderField("X-CatSkin-Sha256");
-                if (expectedHash != null && !expectedHash.isBlank()) {
-                    String actualHash = sha256Hex(bodyBytes);
-                    if (!expectedHash.trim().equalsIgnoreCase(actualHash)) {
-                        ModLog.warn("Texture hash mismatch for {} (expected={}, actual={})",
-                                urlOrPath, expectedHash.trim(), actualHash);
-                        return null;
-                    }
+                NativeImage image;
+                try (InputStream in = connection.getInputStream()) {
+                    image = readImageDirect(in, cfg.maxImageBytes, expectedHash);
                 }
-                try (ByteArrayInputStream imageInput = new ByteArrayInputStream(bodyBytes)) {
-                    NativeImage image = NativeImage.read(imageInput);
-                    if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0
-                            || image.getWidth() > 8192 || image.getHeight() > 8192) {
-                        ModLog.warn("Texture dimensions rejected for {}: {}x{}", urlOrPath,
-                                image == null ? 0 : image.getWidth(),
-                                image == null ? 0 : image.getHeight());
-                        if (image != null) {
-                            image.close();
-                        }
-                        return null;
+                if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0
+                        || image.getWidth() > 8192 || image.getHeight() > 8192) {
+                    ModLog.warn("Texture dimensions rejected for {}: {}x{}", urlOrPath,
+                            image == null ? 0 : image.getWidth(),
+                            image == null ? 0 : image.getHeight());
+                    if (image != null) {
+                        image.close();
                     }
-                    ModLog.trace("Texture downloaded: {}x{} from {}", image.getWidth(), image.getHeight(), urlOrPath);
-                    return image;
+                    return null;
                 }
+                ModLog.trace("Texture downloaded: {}x{} from {}", image.getWidth(), image.getHeight(), urlOrPath);
+                return image;
             } catch (Exception exception) {
                 ModLog.error("Texture download failed: " + urlOrPath, exception);
                 return null;
@@ -994,6 +983,8 @@ public final class ServerApiClient {
                     if (!sseStop) {
                         ModLog.warn("SSE stream closed, reconnecting");
                         long backoff = Math.min(1_500L * (1L << Math.min(attempt, 5)), 60_000L);
+                        // Add jitter to prevent thundering herd: 50-150% of backoff
+                        backoff = (long) (backoff * (0.5 + Math.random()));
                         sleepQuietly(backoff);
                     }
                 } catch (Exception exception) {
@@ -1002,6 +993,8 @@ public final class ServerApiClient {
                         ModLog.warn("SSE error on attempt {}: {}", attempt, exception.getMessage());
                         ModLog.trace("SSE exception details", exception);
                         long backoff = Math.min(1_500L * (1L << Math.min(attempt, 5)), 60_000L);
+                        // Add jitter to prevent thundering herd: 50-150% of backoff
+                        backoff = (long) (backoff * (0.5 + Math.random()));
                         sleepQuietly(backoff);
                     }
                 } finally {
@@ -1703,6 +1696,27 @@ public final class ServerApiClient {
             out.write(buffer, 0, read);
         }
         return out.toByteArray();
+    }
+
+    /**
+     * Reads an image from an InputStream directly, optionally verifying SHA-256 hash.
+     * Avoids double allocation by streaming directly to NativeImage.
+     */
+    private static NativeImage readImageDirect(InputStream in, int maxBytes, String expectedHash) throws IOException {
+        if (expectedHash != null && !expectedHash.isBlank()) {
+            // Hash verification required: buffer to byte array first
+            byte[] bodyBytes = readAllBytes(in, maxBytes);
+            String actualHash = sha256Hex(bodyBytes);
+            if (!expectedHash.trim().equalsIgnoreCase(actualHash)) {
+                throw new IOException("Texture hash mismatch (expected=" + expectedHash.trim() + ", actual=" + actualHash + ")");
+            }
+            try (ByteArrayInputStream imageInput = new ByteArrayInputStream(bodyBytes)) {
+                return NativeImage.read(imageInput);
+            }
+        } else {
+            // No hash verification: stream directly to NativeImage to avoid double allocation
+            return NativeImage.read(in);
+        }
     }
 
     private static String sha256Hex(byte[] value) throws IOException {
