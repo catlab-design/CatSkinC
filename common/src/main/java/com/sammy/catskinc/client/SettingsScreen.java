@@ -122,8 +122,7 @@ public final class SettingsScreen extends Screen {
 
     @Override
     public void render(GuiGraphics drawContext, int mouseX, int mouseY, float delta) {
-        // Draw backdrop or solid background
-        drawContext.fill(0, 0, this.width, this.height, -871428337);
+        // Keep world background visible; no full-screen dark overlay (consistent with SkinUploadScreen)
         
         // Draw top tab bar
         this.renderTabs(drawContext, mouseX, mouseY, false);
