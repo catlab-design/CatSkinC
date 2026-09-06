@@ -9,7 +9,15 @@ public final class PlayerSkinOverrideResolver {
     }
 
     public static Identifier resolveTexture(UUID uuid) {
-        ResolvedOverride override = resolveOverride(uuid);
+        return resolveTexture(uuid, MyopiaLod.Level.L0);
+    }
+
+    /**
+     * Resolves the override texture at a Myopia LOD level. Local (not yet synced) overrides
+     * from {@link SkinOverrideStore} are always returned at full resolution.
+     */
+    public static Identifier resolveTexture(UUID uuid, MyopiaLod.Level level) {
+        ResolvedOverride override = resolveOverride(uuid, level);
         return override == null ? null : override.texture();
     }
 
@@ -25,6 +33,10 @@ public final class PlayerSkinOverrideResolver {
     }
 
     private static ResolvedOverride resolveOverride(UUID uuid) {
+        return resolveOverride(uuid, MyopiaLod.Level.L0);
+    }
+
+    private static ResolvedOverride resolveOverride(UUID uuid, MyopiaLod.Level level) {
         if (uuid == null) {
             return null;
         }
@@ -34,7 +46,7 @@ public final class PlayerSkinOverrideResolver {
             return new ResolvedOverride(entry.texture, entry.slim);
         }
 
-        Identifier cached = SkinManagerClient.getCached(uuid);
+        Identifier cached = SkinManagerClient.getCached(uuid, level);
         if (cached != null) {
             return new ResolvedOverride(cached, SkinManagerClient.isSlimOrNull(uuid));
         }

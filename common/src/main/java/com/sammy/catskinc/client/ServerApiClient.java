@@ -250,7 +250,9 @@ public final class ServerApiClient {
     }
 
     private static RuntimeConfig runtimeConfig() {
-        String baseUrl = ModConfig.get().getCatskinCloudIp();
+        String baseUrl = ModConfig.get().isDebugTestServerEnabled() && CatskincClient.isDebugPreviewEnabled()
+                ? "https://storage-skintest.catlabdesign.space"
+                : ModConfig.get().getCatskinCloudIp();
         if (baseUrl == null || baseUrl.isBlank()) {
             baseUrl = DEFAULT_BASE_URL;
         } else {
@@ -2202,4 +2204,3 @@ public final class ServerApiClient {
     private record CachedPing(boolean ok, long cachedAtMs) {
     }
 }
-

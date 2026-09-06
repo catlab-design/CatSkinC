@@ -23,10 +23,27 @@ public final class ModConfig {
     // Connection mode: AUTO (WS with SSE fallback), WEBSOCKET (force WS), SSE (force SSE)
     private ConnectionMode connectionMode = ConnectionMode.AUTO;
 
+    // Myopia (distance-based skin LOD). Off by default so existing users keep full-res skins.
+    private boolean myopiaEnabled = false;
+    private int myopiaDistance = MYOPIA_DISTANCE_DEFAULT;
+    private MyopiaMode myopiaMode = MyopiaMode.NORMAL;
+    private boolean debugTestServerEnabled = false;
+    private boolean debugForceMyopia = false;
+
+    public static final int MYOPIA_DISTANCE_MIN = 4;
+    public static final int MYOPIA_DISTANCE_MAX = 128;
+    public static final int MYOPIA_DISTANCE_DEFAULT = 20;
+    public static final int MYOPIA_DISTANCE_STEP = 5;
+
     public enum ConnectionMode {
         AUTO,       // Try WebSocket first, fallback to SSE on failure
         WEBSOCKET,  // Force WebSocket (protocol v3), no fallback
         SSE         // Force SSE (protocol v2) only
+    }
+
+    public enum MyopiaMode {
+        NORMAL,     // full / half / quarter / eighth resolution at 1x / 2x / 4x base distance
+        PANICKED    // half / quarter / eighth resolution at 1x / 2x base distance
     }
 
     private static ModConfig instance = new ModConfig();
@@ -136,5 +153,40 @@ public final class ModConfig {
     public void setMaxSkinResolution(int maxSkinResolution) {
         this.maxSkinResolution = Math.max(64, Math.min(maxSkinResolution, 8192));
     }
-}
 
+    public boolean isMyopiaEnabled() {
+        return myopiaEnabled;
+    }
+
+    public void setMyopiaEnabled(boolean myopiaEnabled) {
+        this.myopiaEnabled = myopiaEnabled;
+    }
+
+    public int getMyopiaDistance() {
+        return clampMyopiaDistance(myopiaDistance);
+    }
+
+    public void setMyopiaDistance(int myopiaDistance) {
+        this.myopiaDistance = clampMyopiaDistance(myopiaDistance);
+    }
+
+    public MyopiaMode getMyopiaMode() {
+        return myopiaMode == null ? MyopiaMode.NORMAL : myopiaMode;
+    }
+
+    public void setMyopiaMode(MyopiaMode myopiaMode) {
+        this.myopiaMode = myopiaMode == null ? MyopiaMode.NORMAL : myopiaMode;
+    }
+
+    public static int clampMyopiaDistance(int value) {
+        return Math.max(MYOPIA_DISTANCE_MIN, Math.min(MYOPIA_DISTANCE_MAX, value));
+    }
+
+    public boolean isDebugTestServerEnabled() { return debugTestServerEnabled; }
+
+    public void setDebugTestServerEnabled(boolean enabled) { this.debugTestServerEnabled = enabled; }
+
+    public boolean isDebugForceMyopia() { return debugForceMyopia; }
+
+    public void setDebugForceMyopia(boolean enabled) { this.debugForceMyopia = enabled; }
+}

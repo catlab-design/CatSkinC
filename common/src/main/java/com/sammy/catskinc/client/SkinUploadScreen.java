@@ -309,6 +309,7 @@ extends Screen {
         this.lastMouseX = n;
         this.lastMouseY = n2;
         this.drawBackdrop(drawContext);
+        GuiBackdrop.drawVignette(drawContext, this.width, this.height);
         float f2 = 1.0F;
         this.renderTabs(drawContext, n, n2, true);
         int titleY = 10;
@@ -1455,6 +1456,7 @@ extends Screen {
         String text2 = "Settings";
         int textW2 = this.textRenderer.getWidth(text2);
         drawContext.drawTextWithShadow(this.textRenderer, Text.literal(text2), x2 + (tabW - textW2) / 2, tabY + (tabH - 8) / 2, -1);
+
     }
 
     private boolean isInside(int n, int n2, int n3, int n4, int n5, int n6) {
@@ -1806,4 +1808,3 @@ extends Screen {
         }
     }
 }
-

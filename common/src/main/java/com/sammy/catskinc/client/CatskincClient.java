@@ -2,6 +2,7 @@ package com.sammy.catskinc.client;
 
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
+import dev.architectury.platform.Platform;
 import dev.architectury.registry.client.keymappings.KeyMappingRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
@@ -12,7 +13,10 @@ import java.io.File;
 import java.lang.management.ManagementFactory;
 
 public final class CatskincClient {
-    private static final int DEFAULT_OPEN_UI_KEY = 75;
+    private static final int DEFAULT_OPEN_UI_KEY = 75;            // GLFW_KEY_K
+    private static final int DEFAULT_MYOPIA_INCREASE_KEY = 265;   // GLFW_KEY_UP
+    private static final int DEFAULT_MYOPIA_DECREASE_KEY = 264;   // GLFW_KEY_DOWN
+    public static final String KEY_CATEGORY = "key.categories.catskinc";
     private static final long DEFAULT_REFRESH_INTERVAL_MS = 15_000L;
     private static final int DEFAULT_ENSURE_INTERVAL_TICKS = 20;
     private static final int DEFAULT_ENSURE_LIMIT_PER_PASS = 16;
@@ -20,6 +24,8 @@ public final class CatskincClient {
     private static final long DEFAULT_VOICE_HOLD_MS = 420L;
 
     private static KeyBinding openUiKey;
+    private static KeyBinding myopiaIncreaseKey;
+    private static KeyBinding myopiaDecreaseKey;
     private static int tickCounter;
     private static boolean initialized;
 
@@ -52,14 +58,35 @@ public final class CatskincClient {
                 "key.catskinc.open_ui",
                 InputUtil.Type.KEYSYM,
                 DEFAULT_OPEN_UI_KEY,
-                "key.categories.catskinc");
+                KEY_CATEGORY);
         KeyMappingRegistry.register(openUiKey);
         ModLog.debug("Registered keybinding with keycode={}", DEFAULT_OPEN_UI_KEY);
+
+        myopiaIncreaseKey = new KeyBinding(
+                "key.catskinc.myopia_increase",
+                InputUtil.Type.KEYSYM,
+                DEFAULT_MYOPIA_INCREASE_KEY,
+                KEY_CATEGORY);
+        KeyMappingRegistry.register(myopiaIncreaseKey);
+        myopiaDecreaseKey = new KeyBinding(
+                "key.catskinc.myopia_decrease",
+                InputUtil.Type.KEYSYM,
+                DEFAULT_MYOPIA_DECREASE_KEY,
+                KEY_CATEGORY);
+        KeyMappingRegistry.register(myopiaDecreaseKey);
+        ModLog.debug("Registered Myopia range keybindings (increase={}, decrease={})",
+                DEFAULT_MYOPIA_INCREASE_KEY, DEFAULT_MYOPIA_DECREASE_KEY);
 
         ClientTickEvent.CLIENT_POST.register(client -> {
             while (openUiKey.wasPressed()) {
                 ModLog.trace("Open UI key pressed");
                 openUploadScreen();
+            }
+            while (myopiaIncreaseKey.wasPressed()) {
+                adjustMyopiaDistance(ModConfig.MYOPIA_DISTANCE_STEP);
+            }
+            while (myopiaDecreaseKey.wasPressed()) {
+                adjustMyopiaDistance(-ModConfig.MYOPIA_DISTANCE_STEP);
             }
 
             if (client.world == null) {
@@ -154,8 +181,41 @@ public final class CatskincClient {
         }
     }
 
+    public static KeyBinding getOpenUiKey() {
+        return openUiKey;
+    }
+
+    public static KeyBinding getMyopiaIncreaseKey() {
+        return myopiaIncreaseKey;
+    }
+
+    public static KeyBinding getMyopiaDecreaseKey() {
+        return myopiaDecreaseKey;
+    }
+
+    /**
+     * Shifts the Myopia base distance by {@code delta} blocks (clamped), persists it and
+     * re-evaluates LOD levels. Bound to the Arrow Up / Arrow Down keys by default.
+     */
+    static void adjustMyopiaDistance(int delta) {
+        ModConfig config = ModConfig.get();
+        int before = config.getMyopiaDistance();
+        int after = ModConfig.clampMyopiaDistance(before + delta);
+        if (after == before) {
+            ModLog.trace("Myopia distance unchanged at {} (bounds reached)", before);
+            return;
+        }
+        config.setMyopiaDistance(after);
+        ModConfig.save();
+        MyopiaRenderHook.onSettingsApplied();
+        ModLog.debug("Myopia distance {} -> {}", before, after);
+        Toasts.info(
+                Text.translatable("toast.catskinc.myopia.title"),
+                Text.translatable("toast.catskinc.myopia.distance", after));
+    }
+
     public static void applyConfig() {
-        boolean devDiagnostics = isDevDiagnosticsDefaultOn();
+        boolean devDiagnostics = isDevelopmentMode();
         ModLog.configure(devDiagnostics, devDiagnostics);
         if (devDiagnostics) {
             ModLog.debug("Dev diagnostics enabled (debugger/flag detected)");
@@ -164,7 +224,13 @@ public final class CatskincClient {
         VoiceActivityTracker.configure(180, 420);
     }
 
-    private static boolean isDevDiagnosticsDefaultOn() {
+    public static boolean isDevelopmentMode() {
+        try {
+            if (Platform.isDevelopmentEnvironment()) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
         String env = System.getenv("CATSKINC_DEV");
         if ("1".equals(env) || "true".equalsIgnoreCase(env) || Boolean.getBoolean("catskinc.dev")) {
             return true;
@@ -178,6 +244,11 @@ public final class CatskincClient {
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    /** Debug preview tools are strictly limited to development environments. */
+    public static boolean isDebugPreviewEnabled() {
+        return isDevelopmentMode();
     }
 
     private static void handleJoin(MinecraftClient client) {
@@ -259,4 +330,3 @@ public final class CatskincClient {
         }
     }
 }
-

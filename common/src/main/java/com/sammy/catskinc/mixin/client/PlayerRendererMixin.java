@@ -1,7 +1,6 @@
 package com.sammy.catskinc.mixin.client;
 
-import com.sammy.catskinc.client.PlayerSkinOverrideResolver;
-import com.sammy.catskinc.client.SkinManagerClient;
+import com.sammy.catskinc.client.MyopiaRenderHook;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.util.Identifier;
@@ -9,8 +8,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-
-import java.util.UUID;
 
 @Mixin(value = PlayerEntityRenderer.class, priority = 2_000)
 public abstract class PlayerRendererMixin {
@@ -24,7 +21,8 @@ public abstract class PlayerRendererMixin {
         if (player == null) {
             return;
         }
-        Identifier id = PlayerSkinOverrideResolver.resolveTexture(player.getUuid());
+        // World rendering is the only place Myopia (distance-based LOD) applies.
+        Identifier id = MyopiaRenderHook.resolveWorldTexture(player);
         if (id != null) {
             cir.setReturnValue(id);
         }
