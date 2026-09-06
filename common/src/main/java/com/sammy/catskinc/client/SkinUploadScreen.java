@@ -296,7 +296,7 @@ extends Screen {
 
     public void resize(MinecraftClient minecraftClient, int n, int n2) {
         super.resize(minecraftClient, n, n2);
-        this.init();
+        // Layout will be recalculated in next render frame
     }
 
     public void close() {
