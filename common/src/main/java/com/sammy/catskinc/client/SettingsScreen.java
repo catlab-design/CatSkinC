@@ -515,5 +515,10 @@ public final class SettingsScreen extends Screen {
     private static int clamp(int n, int n2, int n3) {
         return Math.max(n2, Math.min(n3, n));
     }
+
+    @Override
+    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
+        // Keep world background visible without vignette (consistent with SkinUploadScreen)
+    }
 }
 
