@@ -164,9 +164,18 @@ ServerApiClient.startSse()
   "showConnectionToast": true,
   "showUploadToast": true,
   "showInfoToast": true,
-  "showErrorToast": true
+  "showErrorToast": true,
+  "myopiaEnabled": false,
+  "myopiaDistance": 20,
+  "myopiaMode": "NORMAL"
 }
 ```
+
+`myopiaDistance` is a base transition distance in blocks (4–128). In Normal
+mode, skins use full, half, quarter, then eighth resolution as distance crosses
+1×, 2×, and 4× that base. Panicked mode starts at half resolution and reaches
+eighth resolution at 2× the base distance. The world renderer alone uses these
+variants; all menus keep full-resolution skins.
 
 **Environment variable overrides:**
 - `CATSKINC_REQUEST_SIGNING_KEY` — shared HMAC key

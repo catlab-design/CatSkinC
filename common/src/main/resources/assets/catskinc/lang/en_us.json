@@ -1,6 +1,11 @@
 {
-  "key.categories.catskinc": "catskinc",
-  "key.catskinc.open_ui": "Open Skin Manager",
+  "key.categories.catskinc": "CatSkinC",
+  "key.catskinc.open_ui": "Open Skin UI",
+  "key.catskinc.myopia_increase": "Increase Myopia Range",
+  "key.catskinc.myopia_decrease": "Decrease Myopia Range",
+
+  "toast.catskinc.myopia.title": "Myopia",
+  "toast.catskinc.myopia.distance": "Range: %s blocks",
 
   "title.skin_management": "Skin Manager",
   "title.skin_cloud": "Skin Cloud",
@@ -90,4 +95,3 @@
   "config.catskinc.path_events": "Events path",
   "config.catskinc.timeout_ms": "Network timeout (ms)"
 }
-

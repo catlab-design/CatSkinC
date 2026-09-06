@@ -2,6 +2,23 @@
 
 All notable changes to this project should be documented in this file.
 
+## Unreleased
+
+### Added
+
+- **Myopia skin LOD** for CatSkinC-managed remote skins. When enabled, distant
+  players use lazily cached, pixel-perfect half, quarter, or eighth-resolution
+  copies while GUI, inventory, and tab-list skins retain full resolution.
+- A Myopia settings screen with an enabled toggle, a 4–128 block base-distance
+  control, Normal and Panicked modes, and links to Minecraft's keybinding menu.
+- Default keybindings for increasing and decreasing the Myopia range with the
+  Up and Down arrow keys. All settings are persisted in `catskinc.json`.
+
+### Changed
+
+- Managed-skin texture cleanup now also releases all associated Myopia GPU
+  textures and resets per-player LOD state.
+
 ## [4.0.0] - 2026-08-29
 
 ### Added
