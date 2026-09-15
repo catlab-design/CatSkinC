@@ -2,7 +2,7 @@
 
 All notable changes to this project should be documented in this file.
 
-## Unreleased
+## [4.0.0] - 2026-08-29
 
 ### Added
 
@@ -13,16 +13,6 @@ All notable changes to this project should be documented in this file.
   control, Normal and Panicked modes, and links to Minecraft's keybinding menu.
 - Default keybindings for increasing and decreasing the Myopia range with the
   Up and Down arrow keys. All settings are persisted in `catskinc.json`.
-
-### Changed
-
-- Managed-skin texture cleanup now also releases all associated Myopia GPU
-  textures and resets per-player LOD state.
-
-## [4.0.0] - 2026-08-29
-
-### Added
-
 - **WebSocket client** using native `java.net.http.WebSocket` (Java 11+) for high-performance real-time skin sync.
 - **Automatic protocol negotiation** — client sends `x-catskinc-protocol: 3` header on WebSocket handshake.
 - **Resilient connection management**:
@@ -38,6 +28,8 @@ All notable changes to this project should be documented in this file.
 - **Join flow** now attempts WebSocket first, falls back to SSE on failure.
 - **Shared circuit breaker state** between `ServerApiClient` and `WebSocketClient` — REST/SSE/WS failures all contribute to the same breaker.
 - **Heartbeat handling** — application-level JSON ping/pong (30s) replaces binary WebSocket ping frames for consistency.
+- **Managed-skin texture cleanup** now also releases all associated Myopia GPU
+  textures and resets per-player LOD state.
 
 ### Fixed
 
@@ -47,10 +39,37 @@ All notable changes to this project should be documented in this file.
 - **Protocol defense** — client verifies `protocol_version` in welcome message, closes on mismatch.
 - **Fallback trigger** — SSE fallback now activates on abnormal post-connect disconnections, not just initial connect failure.
 - **Toast handler** — implemented proper `Toasts.info()` with translatable titles.
-
-### Security
-
-- **Request signing** (HMAC-SHA256) applied to WebSocket upgrade request.
+- **Select-Fetch race eliminated**: `selectSkin()` now chains `thenRun(refresh)` so the POST completes before the GET, eliminating the 4-8s skin delay after upload.
+- **Pending selections cache**: `PENDING_SELECTIONS` returns the uploaded skin URL immediately after select, avoiding old-skin flashing.
+- **LAST_CHECK on success only**: failed fetches no longer reset the 5s poll timer, preventing a 15s blackout window.
+- **Fast-retry after null skin**: retries fetch in 2s when the server has no cached skin yet, reducing initial sync from 15s to 2s.
+- **Poll interval reduced**: 15s → 5s for faster periodic sync.
+- **SSE clear-skin handling**: clears `BASE_CACHE`/`TALKING_CACHE` on null URL, so players properly revert to the default skin.
+- **SSE reconnect delay**: added 1.5s–60s exponential backoff on stream close (was instant reconnect), preventing server flooding.
+- **Circuit breaker in SSE**: SSE checks `circuitOpenUntilMs` before connecting, eliminating useless retries during outage.
+- **AtomicInteger**: `consecutiveFailures` switched to `AtomicInteger` for correct failure counting.
+- **Always destroy old textures**: removed identity check gate on texture release to prevent GPU memory leaks.
+- **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
+- **Replaced per-player TextureManager registrations with a single shared dynamic texture**: CatSkinC no longer registers per-player textures (`catskinc:remote/<uuid>`) with the vanilla `TextureManager`. Instead, downloaded `NativeImage` objects are cached in `SKIN_IMAGES` and pixel-copied into one shared `catskinc:dynamic/active` texture on each render frame. This prevents F3+S debug dumps from saving every player's skin to disk.
+- **Broadcast framing** — WebSocket clients now receive raw JSON (SSE `data: ` prefix stripped server-side).
+- **Handshake protocol header** — added `X-CatSkinC-Protocol` to WebSocket upgrade request.
+- **Auth race** — session token acquired synchronously before WebSocket connection attempt.
+- **Protocol defense** — client verifies `protocol_version` in welcome message, closes on mismatch.
+- **Fallback trigger** — SSE fallback now activates on abnormal post-connect disconnections, not just initial connect failure.
+- **Toast handler** — implemented proper `Toasts.info()` with translatable titles.
+- **Select-Fetch race eliminated**: `selectSkin()` now chains `thenRun(refresh)` so the POST completes before the GET, eliminating the 4-8s skin delay after upload.
+- **Pending selections cache**: `PENDING_SELECTIONS` returns the uploaded skin URL immediately after select, avoiding old-skin flashing.
+- **LAST_CHECK on success only**: failed fetches no longer reset the 5s poll timer, preventing a 15s blackout window.
+- **Fast-retry after null skin**: retries fetch in 2s when the server has no cached skin yet, reducing initial sync from 15s to 2s.
+- **Poll interval reduced**: 15s → 5s for faster periodic sync.
+- **SSE clear-skin handling**: clears `BASE_CACHE`/`TALKING_CACHE` on null URL, so players properly revert to the default skin.
+- **SSE reconnect delay**: added 1.5s–60s exponential backoff on stream close (was instant reconnect), preventing server flooding.
+- **Circuit breaker in SSE**: SSE checks `circuitOpenUntilMs` before connecting, eliminating useless retries during outage.
+- **AtomicInteger**: `consecutiveFailures` switched to `AtomicInteger` for correct failure counting.
+- **Always destroy old textures**: removed identity check gate on texture release to prevent GPU memory leaks.
+- **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
+- **Replaced per-player TextureManager registrations with a single shared dynamic texture**: CatSkinC no longer registers per-player textures (`catskinc:remote/<uuid>`) with the vanilla `TextureManager`. Instead, downloaded `NativeImage` objects are cached in `SKIN_IMAGES` and pixel-copied into one shared `catskinc:dynamic/active` texture on each render frame. This prevents F3+S debug dumps from saving every player's skin to disk.
+- **Security**: **Request signing** (HMAC-SHA256) applied to WebSocket upgrade request.
 - **Hardened transitive dependencies against Dependabot advisories.** Added `resolutionStrategy { force ... }` constraints in `build.gradle` to pin patched versions of vulnerable transitive libraries on both the project and buildscript classpaths:
   - Netty → `4.1.136.Final` (fixes GHSA-558v-64gr-wgg4 Bzip2Decoder infinite loop and related netty advisories).
   - Log4j → `2.25.4` (fixes Log4j TLS hostname verification, XML escaping, and related advisories).
@@ -58,35 +77,6 @@ All notable changes to this project should be documented in this file.
   - Commons IO → `2.16.1`, Commons Compress → `1.26.0`, Commons Lang3 → `3.18.0`.
   - Buildscript classpath: Commons Text → `1.12.0`, Commons Beanutils → `1.11.0`, Plexus Utils → `3.6.1`.
 - These libraries are Minecraft-provided runtime/build-tooling dependencies and are **not bundled** into the shipped mod JAR, so the end-user artifact is unaffected; the constraints keep the dev runtime and CI dependency graph clean.
-
-## [3.1.1] - 2026-07-21
-
-### Added
-
-- Added pending selections cache to eliminate the select-fetch race condition on skin upload.
-- Added fast-retry mechanism (2s) when server returns no skin, reducing wait from 5-15s to 2s.
-- Added `clearTexture()` method to SkinManagerClient for proper skin clearing on SSE clear events.
-- Added circuit breaker awareness to SSE reconnection loop.
-- Added exponential backoff with jitter to SSE reconnection attempts.
-
-### Changed
-
-- **Fixed skin applied delay (5-10s)**: Chained `selectSkin().thenRun(refresh)` in upload flow so server selection completes before fetch. Moved `LAST_CHECK` update to only happen on actual texture update (not failed fetches). Reduced polling interval from 15s to 5s.
-- **Fixed SSE clear-skin bug**: When server returns no skin URL, cached textures are now properly cleared so player reverts to default Minecraft skin.
-- **Fixed SSE tight reconnect loop**: Added delay on stream-close path (was reconnecting instantly).
-- **Fixed non-atomic circuit breaker**: Changed `consecutiveFailures` from `volatile int` to `AtomicInteger`.
-- **Fixed texture memory leak**: Old textures are now always destroyed on refresh (previously skipped when ID was unchanged).
-
-### Fixed
-
-- Fixed SSE clear events not propagating: clear events now call `clearTexture()` instead of `forceFetch()`.
-- Fixed old skin flashing: pending selections cache ensures fetch returns correct skin immediately after upload.
-- Fixed texture self-destroy race: added `!equals` guard to prevent destroying identical texture IDs.
-- Fixed SSE thread leak: `sseConnection` field properly closed in `stopSse()`.
-- Fixed selectSkin missing forceRefresh retry: retries session token with forceRefresh=true on null.
-- Fixed NativeImage leak in `refreshPreviewTexture()`: NativeImage now properly closed on exception paths.
-- **Fixed HTTP 401 on skin downloads**: Added `signDownloadUrl()` method that appends `?exp=&sig=` HMAC-signed query parameters to download URLs using the client's `requestSigningKey`. This matches the server's `verify_download_signature()` check when `ENFORCE_SIGNED_DOWNLOADS=true`.
-- **Replaced per-player TextureManager registrations with a single shared dynamic texture**: CatSkinC no longer registers per-player textures (`catskinc:remote/<uuid>`) with the vanilla `TextureManager`. Instead, downloaded `NativeImage` objects are cached in `SKIN_IMAGES` and pixel-copied into one shared `catskinc:dynamic/active` texture on each render frame. This prevents F3+S debug dumps from saving every player's skin to disk.
 
 ## [3.1.0] - 2026-06-12
 
