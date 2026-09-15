@@ -40,6 +40,9 @@ public final class SettingsScreen extends Screen {
         new SettingItem("catskinCloudIp", "CatSkinCloud IP", "General"),
         new SettingItem("connectionMode", "Connection Mode", "General"),
         new SettingItem("requestSigningKey", "Request Signing Key", "General"),
+        new SettingItem("myopiaEnabled", "Enabled", "Myopia"),
+        new SettingItem("myopiaDistance", "Range", "Myopia"),
+        new SettingItem("myopiaMode", "Mode", "Myopia"),
         new SettingItem("showConnectionToast", "Connection Toast", "Toasts"),
         new SettingItem("showUploadToast", "Upload Toast", "Toasts"),
         new SettingItem("showInfoToast", "Info Toast", "Toasts"),
@@ -167,7 +170,7 @@ public final class SettingsScreen extends Screen {
         boolean hasIpSetting = false;
 
         // Render categories & items
-        String[] categories = {"General", "Toasts"};
+        String[] categories = {"General", "Myopia", "Toasts"};
         for (String category : categories) {
             // Check if there are matching settings in this category
             List<SettingItem> categorySettings = new ArrayList<>();
@@ -232,14 +235,27 @@ public final class SettingsScreen extends Screen {
                         drawContext.drawString(this.font, Component.literal(currentLabel), dropdownX + (dropdownW - textW) / 2, y + 4, -1);
                         // Draw dropdown arrow
                         drawContext.drawString(this.font, Component.literal("▼"), dropdownX + dropdownW - 16, y + 4, -1);
-                    } else if (item.key.equals("requestSigningKey")) {
+} else if (item.key.equals("requestSigningKey")) {
                         hasRequestSigningKeySetting = true;
                         this.requestSigningKeyEditBox.setX(this.panelX + 120);
                         this.requestSigningKeyEditBox.setY(y);
                         this.requestSigningKeyEditBox.setWidth(this.panelW - 220);
                         this.requestSigningKeyEditBox.visible = true;
-
+                    } else if (item.key.equals("myopiaEnabled")) {
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        drawToggleSwitch(drawContext, mouseX, mouseY, rightOffset - 90, y,
+                                ModConfig.get().isMyopiaEnabled());
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+                    } else if (item.key.equals("myopiaDistance")) {
+                        drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        String range = "< " + ModConfig.get().getMyopiaDistance() + " blocks >";
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100, 16, range);
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+                    } else if (item.key.equals("myopiaMode")) {
+                        drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        String mode = ModConfig.get().getMyopiaMode() == ModConfig.MyopiaMode.PANICKED
+                                ? "Panicked" : "Normal";
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100, 16, mode);
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
                     } else {
                         boolean val = getSettingValue(item.key);
@@ -280,6 +296,23 @@ public final class SettingsScreen extends Screen {
 
         // Reset button
         drawRowButton(drawContext, mouseX, mouseY, resetX, y, 40, btnH, "Reset");
+    }
+
+    /** Draws a compact slider-style switch used by the Myopia enable setting. */
+    private void drawToggleSwitch(GuiGraphics drawContext, int mouseX, int mouseY, int x, int y, boolean on) {
+        int width = 40;
+        int height = 16;
+        boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+        int track = on ? (hovered ? 0xFF48A860 : 0xFF357C47) : (hovered ? 0xFF666666 : 0xFF454545);
+        drawContext.fill(x, y + 3, x + width, y + 13, track);
+        drawContext.fill(x + 1, y + 2, x + width - 1, y + 14, track);
+        drawContext.fill(x + 2, y + 1, x + width - 2, y + 15, track);
+        int knobX = on ? x + 25 : x + 3;
+        int knob = hovered ? 0xFFFFFFFF : 0xFFE0E0E0;
+        drawContext.fill(knobX, y + 3, knobX + 12, y + 13, knob);
+        drawContext.fill(knobX + 1, y + 2, knobX + 11, y + 14, knob);
+        drawContext.fill(knobX + 2, y + 1, knobX + 10, y + 15, knob);
+        drawContext.drawString(this.font, Component.literal(on ? "ON" : "OFF"), x - 22, y + 4, on ? 0xFF80E890 : 0xFFAAAAAA);
     }
 
     private void drawRowButton(GuiGraphics drawContext, int mouseX, int mouseY, int x, int y, int w, int h, String text) {
@@ -427,6 +460,65 @@ public final class SettingsScreen extends Screen {
                                 saveAndApply();
                                 return true;
                             }
+} else if (item.key.equals("requestSigningKey")) {
+                        hasRequestSigningKeySetting = true;
+                        this.requestSigningKeyEditBox.setX(this.panelX + 120);
+                        this.requestSigningKeyEditBox.setY(y);
+                        this.requestSigningKeyEditBox.setWidth(this.panelW - 220);
+                        this.requestSigningKeyEditBox.visible = true;
+                    } else if (item.key.equals("myopiaEnabled")) {
+                            int toggleX = rightOffset - 90;
+                            int resetX = rightOffset - 40;
+                            if (mouseX >= toggleX && mouseX < toggleX + 40 && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                config.setMyopiaEnabled(!config.isMyopiaEnabled());
+                                saveAndApply();
+                                return true;
+                            }
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                config.setMyopiaEnabled(false);
+                                saveAndApply();
+                                return true;
+                            }
+                        } else if (item.key.equals("myopiaDistance")) {
+                            int resetX = rightOffset - 40;
+                            int dropdownX = rightOffset - 145;
+                            int dropdownW = 100;
+                            int dropdownH = 16;
+                            if (mouseX >= dropdownX && mouseX < dropdownX + dropdownW && mouseY >= y && mouseY < y + dropdownH) {
+                                // Cycle through distances - just increment for now
+                                int newDist = config.getMyopiaDistance() + ModConfig.MYOPIA_DISTANCE_STEP;
+                                if (newDist > ModConfig.MYOPIA_DISTANCE_MAX) newDist = ModConfig.MYOPIA_DISTANCE_MIN;
+                                config.setMyopiaDistance(newDist);
+                                ModConfig.save();
+                                ModSounds.playClick();
+                                return true;
+                            }
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                config.setMyopiaDistance(ModConfig.MYOPIA_DISTANCE_DEFAULT);
+                                ModConfig.save();
+                                ModSounds.playClick();
+                                return true;
+                            }
+                        } else if (item.key.equals("myopiaMode")) {
+                            int resetX = rightOffset - 40;
+                            int dropdownX = rightOffset - 145;
+                            int dropdownW = 100;
+                            int dropdownH = 16;
+                            if (mouseX >= dropdownX && mouseX < dropdownX + dropdownW && mouseY >= y && mouseY < y + dropdownH) {
+                                config.setMyopiaMode(config.getMyopiaMode() == ModConfig.MyopiaMode.NORMAL
+                                        ? ModConfig.MyopiaMode.PANICKED : ModConfig.MyopiaMode.NORMAL);
+                                ModConfig.save();
+                                ModSounds.playClick();
+                                return true;
+                            }
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                config.setMyopiaMode(ModConfig.MyopiaMode.NORMAL);
+                                ModConfig.save();
+                                ModSounds.playClick();
+                                return true;
+                            }
                         } else if (item.key.equals("requestSigningKey")) {
                             int resetX = rightOffset - 40;
                             if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
@@ -467,6 +559,9 @@ public final class SettingsScreen extends Screen {
             case "showUploadToast": return config.isShowUploadToast();
             case "showInfoToast": return config.isShowInfoToast();
             case "showErrorToast": return config.isShowErrorToast();
+            case "myopiaEnabled": return config.isMyopiaEnabled();
+            case "myopiaDistance": return config.getMyopiaDistance() > 0;
+            case "myopiaMode": return config.getMyopiaMode() == ModConfig.MyopiaMode.PANICKED;
             default: return false;
         }
     }
@@ -478,6 +573,9 @@ public final class SettingsScreen extends Screen {
             case "showUploadToast": config.setShowUploadToast(!config.isShowUploadToast()); break;
             case "showInfoToast": config.setShowInfoToast(!config.isShowInfoToast()); break;
             case "showErrorToast": config.setShowErrorToast(!config.isShowErrorToast()); break;
+            case "myopiaEnabled": config.setMyopiaEnabled(!config.isMyopiaEnabled()); break;
+            case "myopiaMode": config.setMyopiaMode(config.getMyopiaMode() == ModConfig.MyopiaMode.NORMAL
+                    ? ModConfig.MyopiaMode.PANICKED : ModConfig.MyopiaMode.NORMAL); break;
         }
     }
 
@@ -488,6 +586,9 @@ public final class SettingsScreen extends Screen {
             case "showUploadToast": config.setShowUploadToast(true); break;
             case "showInfoToast": config.setShowInfoToast(true); break;
             case "showErrorToast": config.setShowErrorToast(true); break;
+            case "myopiaEnabled": config.setMyopiaEnabled(false); break;
+            case "myopiaDistance": config.setMyopiaDistance(ModConfig.MYOPIA_DISTANCE_DEFAULT); break;
+            case "myopiaMode": config.setMyopiaMode(ModConfig.MyopiaMode.NORMAL); break;
         }
     }
 

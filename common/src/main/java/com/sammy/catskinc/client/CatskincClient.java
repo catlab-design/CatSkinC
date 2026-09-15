@@ -12,6 +12,8 @@ import net.minecraft.network.chat.Component;
 
 public final class CatskincClient {
     private static final int DEFAULT_OPEN_UI_KEY = 75;
+    private static final int DEFAULT_MYOPIA_INCREASE_KEY = InputConstants.KEY_EQUALS;
+    private static final int DEFAULT_MYOPIA_DECREASE_KEY = InputConstants.KEY_MINUS;
     private static final long DEFAULT_REFRESH_INTERVAL_MS = 5_000L;
     private static final int DEFAULT_ENSURE_INTERVAL_TICKS = 20;
     private static final int DEFAULT_ENSURE_LIMIT_PER_PASS = 16;
@@ -19,8 +21,12 @@ public final class CatskincClient {
     private static final long DEFAULT_VOICE_HOLD_MS = 420L;
 
     private static KeyMapping openUiKey;
+    private static KeyMapping myopiaIncreaseKey;
+    private static KeyMapping myopiaDecreaseKey;
     private static int tickCounter;
     private static boolean initialized;
+    private static boolean debugPreviewEnabled = false;
+    private static boolean debugForceMyopia = false;
 
     private CatskincClient() {
     }
@@ -55,10 +61,31 @@ public final class CatskincClient {
         KeyMappingRegistry.register(openUiKey);
         ModLog.debug("Registered keybinding with keycode={}", DEFAULT_OPEN_UI_KEY);
 
+        myopiaIncreaseKey = new KeyMapping(
+                "key.catskinc.myopia_increase",
+                InputConstants.Type.KEYSYM,
+                DEFAULT_MYOPIA_INCREASE_KEY,
+                "key.categories.catskinc");
+        KeyMappingRegistry.register(myopiaIncreaseKey);
+        myopiaDecreaseKey = new KeyMapping(
+                "key.catskinc.myopia_decrease",
+                InputConstants.Type.KEYSYM,
+                DEFAULT_MYOPIA_DECREASE_KEY,
+                "key.categories.catskinc");
+        KeyMappingRegistry.register(myopiaDecreaseKey);
+        ModLog.debug("Registered Myopia range keybindings (increase={}, decrease={})",
+                DEFAULT_MYOPIA_INCREASE_KEY, DEFAULT_MYOPIA_DECREASE_KEY);
+
         ClientTickEvent.CLIENT_POST.register(client -> {
             while (openUiKey.consumeClick()) {
                 ModLog.trace("Open UI key pressed");
                 openUploadScreen();
+            }
+            while (myopiaIncreaseKey.consumeClick()) {
+                adjustMyopiaDistance(ModConfig.MYOPIA_DISTANCE_STEP);
+            }
+            while (myopiaDecreaseKey.consumeClick()) {
+                adjustMyopiaDistance(-ModConfig.MYOPIA_DISTANCE_STEP);
             }
 
             if (client.level == null) {
@@ -233,6 +260,39 @@ public final class CatskincClient {
         } catch (Exception exception) {
             ModLog.error("Join flow failed", exception);
         }
+    }
+
+private static void adjustMyopiaDistance(int delta) {
+        ModConfig config = ModConfig.get();
+        int before = config.getMyopiaDistance();
+        int after = ModConfig.clampMyopiaDistance(before + delta);
+        if (after != before) {
+            config.setMyopiaDistance(after);
+            ModConfig.save();
+            ModLog.debug("Myopia distance changed: {} -> {}", before, after);
+            Minecraft client = Minecraft.getInstance();
+            if (client != null) {
+                client.execute(() -> Toasts.info(
+                        Component.translatable("toast.catskinc.myopia.title"),
+                        Component.translatable("toast.catskinc.myopia.distance", after)));
+            }
+        }
+    }
+
+    public static boolean isDebugPreviewEnabled() {
+        return debugPreviewEnabled;
+    }
+
+    public static boolean isDebugForceMyopia() {
+        return debugForceMyopia;
+    }
+
+    public static void setDebugPreviewEnabled(boolean enabled) {
+        debugPreviewEnabled = enabled;
+    }
+
+    public static void setDebugForceMyopia(boolean enabled) {
+        debugForceMyopia = enabled;
     }
 }
 

@@ -105,6 +105,42 @@ public final class SkinManagerClient {
         return uuid == null ? null : resolveRenderTexture(uuid);
     }
 
+    /**
+     * Like {@link #getCached(UUID)} but returns a reduced-resolution variant for the
+     * given Myopia LOD level. {@code L0} (or {@code null}) yields the full-resolution texture.
+     */
+    public static ResourceLocation getCached(UUID uuid, MyopiaLod.Level level) {
+        return uuid == null ? null : resolveRenderTexture(uuid, level == null ? MyopiaLod.Level.L0 : level);
+    }
+
+    /** True when this player has a CatSkinC-managed skin image loaded (i.e. eligible for Myopia LOD). */
+    public static boolean hasManagedSkin(UUID uuid) {
+        return uuid != null && SKIN_IMAGES.containsKey(uuid);
+    }
+
+    /** Installs a small synthetic skin for the development Myopia preview player. */
+    static void installDebugSkin(UUID uuid) {
+        if (uuid == null) return;
+        NativeImage image = new NativeImage(64, 64, true);
+        for (int y = 0; y < 64; y++) {
+            for (int x = 0; x < 64; x++) {
+                boolean stripe = ((x / 8) + (y / 8)) % 2 == 0;
+                image.setPixelRGBA(x, y, stripe ? 0xFFFF4D9D : 0xFF293B9F);
+            }
+        }
+        NativeImage previous = SKIN_IMAGES.put(uuid, image);
+        closeQuietly(previous);
+        SLIM.put(uuid, false);
+        Minecraft client = Minecraft.getInstance();
+        if (client != null) {
+            ResourceLocation id = Identifiers.mod("debug/" + uuid);
+            client.getTextureManager().register(Identifiers.mod("debug/" + uuid), new DynamicTexture(copyImage(image)));
+            VANILLA_TEXTURES.put(uuid, id);
+            FALLBACK_TEXTURES.add(uuid);
+        }
+        MyopiaTextureCache.invalidate(uuid);
+    }
+
     public static void ensureFetch(UUID uuid) {
         if (uuid == null) {
             return;
@@ -327,6 +363,7 @@ public final class SkinManagerClient {
         FAST_RETRY_SCHEDULED.clear();
         INJECTED_IMAGE_HASH.clear();
         restoreAllPixels();
+        MyopiaTextureCache.clearAll();
         Minecraft client = Minecraft.getInstance();
         if (client != null) {
             for (UUID uuid : FALLBACK_TEXTURES) {
@@ -452,7 +489,7 @@ public final class SkinManagerClient {
         }
     }
 
-    private static void blitPixels(NativeImage target, NativeImage source) {
+    public static void blitPixels(NativeImage target, NativeImage source) {
         int sw = source.getWidth();
         int sh = source.getHeight();
         int tw = target.getWidth();
@@ -507,6 +544,10 @@ public final class SkinManagerClient {
     }
 
     private static ResourceLocation resolveRenderTexture(UUID uuid) {
+        return resolveRenderTexture(uuid, MyopiaLod.Level.L0);
+    }
+
+    private static ResourceLocation resolveRenderTexture(UUID uuid, MyopiaLod.Level level) {
         NativeImage image = SKIN_IMAGES.get(uuid);
         if (image == null) {
             return null;
@@ -515,6 +556,12 @@ public final class SkinManagerClient {
             NativeImage talking = TALKING_IMAGES.get(uuid);
             if (talking != null) {
                 image = talking;
+            }
+        }
+        if (level != null && !level.isFull()) {
+            ResourceLocation lodTexture = MyopiaTextureCache.get(uuid, MyopiaTextureCache.VARIANT_SKIN, level, image);
+            if (lodTexture != null) {
+                return lodTexture;
             }
         }
         injectPixels(uuid, image);
@@ -625,6 +672,7 @@ public final class SkinManagerClient {
         VANILLA_TEXTURES.clear();
         FALLBACK_TEXTURES.clear();
         ORIGINAL_PIXELS.clear();
+        MyopiaTextureCache.clearAll();
     }
 
     private record DownloadedImages(
