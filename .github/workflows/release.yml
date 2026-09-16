@@ -1,0 +1,204 @@
+name: "Release CatSkinC"
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        type: choice
+        description: 'Branch to build (main=1.20.1)'
+        options: [main]
+        required: true
+      version:
+        description: 'Override version (optional, defaults to gradle.properties mod_version)'
+        required: false
+      publish_modrinth:
+        type: boolean
+        default: true
+        description: 'Publish to Modrinth'
+      publish_curseforge:
+        type: boolean
+        default: true
+        description: 'Publish to CurseForge'
+      notify:
+        type: boolean
+        default: true
+        description: 'Send notifications (Discord, GitHub Release)'
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+
+env:
+  MODRINTH_PROJECT_ID: catskinc
+  CURSEFORGE_PROJECT_ID: 1375958
+
+jobs:
+  build:
+    name: Build JARs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      mc_version: ${{ steps.mc_version.outputs.mc_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+      
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Determine MC version
+        id: mc_version
+        run: |
+          echo "mc_version=1.20.1" >> $GITHUB_OUTPUT
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+      
+      - name: Build Fabric
+        run: ./gradlew :fabric:remapJar --no-daemon
+      
+      - name: Build Forge
+        run: ./gradlew :forge:remapJar --no-daemon
+      
+      - name: Rename artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MC_VERSION="${{ steps.mc_version.outputs.mc_version }}"
+          
+          # Fabric
+          mv fabric/build/libs/CatSkinC-fabric-${{ steps.version.outputs.version }}.jar \
+             catskinc-fabric_${MC_VERSION}-${{ steps.version.outputs.version }}.jar
+          
+          # Forge
+          mv forge/build/libs/CatSkinC-forge-${{ steps.version.outputs.version }}.jar \
+             catskinc-forge_${MC_VERSION}-${{ steps.version.outputs.version }}.jar
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-jars
+          path: |
+            catskinc-*.jar
+          retention-days: 7
+
+  extract-changelog:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.extract.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+      
+      - name: Extract changelog
+        id: extract
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          node .github/scripts/extract-changelog.js "${VERSION}" > changelog.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  publish-modrinth:
+    needs: [build, extract-changelog]
+    if: ${{ inputs.publish_modrinth }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-jars
+          path: artifacts
+      
+      - name: Publish to Modrinth
+        uses: Kir-Antipov/modrinth-action@v2
+        with:
+          api-token: ${{ secrets.MODRINTH_TOKEN }}
+          project-id: ${{ env.MODRINTH_PROJECT_ID }}
+          version: ${{ needs.build.outputs.version }}
+          name: "CatSkinC ${{ needs.build.outputs.version }}"
+          changelog: ${{ needs.extract-changelog.outputs.changelog }}
+          files: |
+            artifacts/catskinc-*.jar
+          dependencies: |
+            [{"project_id": "396111", "dependency_type": "required"}, {"project_id": "554908", "dependency_type": "optional"}, {"project_id": "420372", "dependency_type": "optional"}]
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
+          loaders: |
+            fabric,forge
+
+  publish-curseforge:
+    needs: [build, extract-changelog]
+    if: ${{ inputs.publish_curseforge }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-jars
+          path: artifacts
+      
+      - name: Publish to CurseForge
+        uses: WispProxy/CurseForge-Github-Action@v1
+        with:
+          api-key: ${{ secrets.CURSEFORGE_TOKEN }}
+          project-id: ${{ secrets.CURSEFORGE_PROJECT_ID }}
+          changelog: ${{ needs.extract-changelog.outputs.changelog }}
+          changelog-type: markdown
+          files: |
+            artifacts/catskinc-*.jar
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
+          loaders: |
+            fabric,forge
+          relations: '[{"project_id": 396111, "type": 3}, {"project_id": 554908, "type": 5}, {"project_id": 420372, "type": 5}]'
+          display-name: "CatSkinC ${{ needs.build.outputs.version }}"
+          release-type: release
+
+  notify:
+    needs: [publish-modrinth, publish-curseforge]
+    if: ${{ inputs.notify }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Discord Notification
+        if: ${{ secrets.DISCORD_WEBHOOK != '' }}
+        run: |
+          curl -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "CatSkinC ${{ needs.build.outputs.version }} Released!",
+                "description": "Published to Modrinth & CurseForge for Minecraft ${{ needs.build.outputs.mc_version }}",
+                "color": 5814783,
+                "fields": [
+                  {"name": "Version", "value": "${{ needs.build.outputs.version }}", "inline": true},
+                  {"name": "MC Version", "value": "${{ needs.build.outputs.mc_version }}", "inline": true},
+                  {"name": "Modrinth", "value": "https://modrinth.com/mod/catskinc/version/${{ needs.build.outputs.version }}", "inline": false},
+                  {"name": "CurseForge", "value": "https://www.curseforge.com/minecraft/mc-mods/catskinc/files/${{ needs.build.outputs.version }}", "inline": false}
+                ]
+              }]
+            }'
+      
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.build.outputs.version }}
+          name: CatSkinC ${{ needs.build.outputs.version }}
+          body: ${{ needs.extract-changelog.outputs.changelog }}
+          files: artifacts/catskinc-*.jar
+          draft: false
+          prerelease: false
