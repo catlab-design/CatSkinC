@@ -82,10 +82,10 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           MC_VERSION="${{ steps.mc_version.outputs.mc_version }}"
 
-          mv "fabric/build/libs/CatSkinC-fabric-${VERSION}.jar" \
+          mv "fabric/build/libs/catskinc-fabric-${VERSION}.jar" \
              "catskinc-fabric_${MC_VERSION}-${VERSION}.jar"
 
-          mv "forge/build/libs/CatSkinC-forge-${VERSION}.jar" \
+          mv "forge/build/libs/catskinc-forge-${VERSION}.jar" \
              "catskinc-forge_${MC_VERSION}-${VERSION}.jar"
 
       - name: Upload artifacts
