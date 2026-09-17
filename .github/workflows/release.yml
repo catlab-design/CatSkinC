@@ -126,24 +126,42 @@ jobs:
           name: release-jars
           path: artifacts
 
-      - name: Publish to Modrinth
+      - name: Publish Fabric build to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-          name: "CatSkinC ${{ needs.build.outputs.version }}"
-          version: ${{ needs.build.outputs.version }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Fabric)"
+          version: "${{ needs.build.outputs.version }}+fabric"
           changelog: ${{ needs['extract-changelog'].outputs.changelog }}
           files: |
-            artifacts/catskinc-*.jar
+            artifacts/catskinc-fabric_*.jar
           loaders: |
             fabric
-            forge
           game-versions: |
             ${{ needs.build.outputs.mc_version }}
           # NOTE: these IDs were carried over from the original workflow —
           # please confirm they're the correct Modrinth project IDs/slugs
           # for these three dependencies before relying on this.
+          dependencies: |
+            dependency-1(required){modrinth:396111}
+            dependency-2(optional){modrinth:554908}
+            dependency-3(optional){modrinth:420372}
+
+      - name: Publish Forge build to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Forge)"
+          version: "${{ needs.build.outputs.version }}+forge"
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: |
+            artifacts/catskinc-forge_*.jar
+          loaders: |
+            forge
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
           dependencies: |
             dependency-1(required){modrinth:396111}
             dependency-2(optional){modrinth:554908}
@@ -160,24 +178,42 @@ jobs:
           name: release-jars
           path: artifacts
 
-      - name: Publish to CurseForge
+      - name: Publish Fabric build to CurseForge
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          name: "CatSkinC ${{ needs.build.outputs.version }}"
-          version: ${{ needs.build.outputs.version }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Fabric)"
+          version: "${{ needs.build.outputs.version }}+fabric"
           changelog: ${{ needs['extract-changelog'].outputs.changelog }}
           files: |
-            artifacts/catskinc-*.jar
+            artifacts/catskinc-fabric_*.jar
           loaders: |
             fabric
-            forge
           game-versions: |
             ${{ needs.build.outputs.mc_version }}
           # NOTE: these IDs were carried over from the original workflow —
           # please confirm they're the correct CurseForge project IDs
           # for these three dependencies before relying on this.
+          dependencies: |
+            dependency-1(required){curseforge:396111}
+            dependency-2(optional){curseforge:554908}
+            dependency-3(optional){curseforge:420372}
+
+      - name: Publish Forge build to CurseForge
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Forge)"
+          version: "${{ needs.build.outputs.version }}+forge"
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: |
+            artifacts/catskinc-forge_*.jar
+          loaders: |
+            forge
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
           dependencies: |
             dependency-1(required){curseforge:396111}
             dependency-2(optional){curseforge:554908}
