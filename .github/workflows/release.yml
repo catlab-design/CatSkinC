@@ -45,47 +45,49 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch }}
-      
+
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
-      
+
       - name: Extract version
         id: version
         run: |
-          VERSION=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Determine MC version
         id: mc_version
         run: |
-          echo "mc_version=1.20.1" >> $GITHUB_OUTPUT
-      
+          echo "mc_version=1.20.1" >> "$GITHUB_OUTPUT"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-      
+
       - name: Build Fabric
         run: ./gradlew :fabric:remapJar --no-daemon
-      
+
       - name: Build Forge
         run: ./gradlew :forge:remapJar --no-daemon
-      
+
       - name: Rename artifacts
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           MC_VERSION="${{ steps.mc_version.outputs.mc_version }}"
-          
-          # Fabric
-          mv fabric/build/libs/CatSkinC-fabric-${{ steps.version.outputs.version }}.jar \
-             catskinc-fabric_${MC_VERSION}-${{ steps.version.outputs.version }}.jar
-          
-          # Forge
-          mv forge/build/libs/CatSkinC-forge-${{ steps.version.outputs.version }}.jar \
-             catskinc-forge_${MC_VERSION}-${{ steps.version.outputs.version }}.jar
-      
+
+          mv "fabric/build/libs/CatSkinC-fabric-${VERSION}.jar" \
+             "catskinc-fabric_${MC_VERSION}-${VERSION}.jar"
+
+          mv "forge/build/libs/CatSkinC-forge-${VERSION}.jar" \
+             "catskinc-forge_${MC_VERSION}-${VERSION}.jar"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -103,15 +105,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch }}
-      
+
       - name: Extract changelog
         id: extract
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           node .github/scripts/extract-changelog.js "${VERSION}" > changelog.md
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat changelog.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+          cat changelog.md >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
   publish-modrinth:
     needs: [build, extract-changelog]
@@ -123,7 +125,7 @@ jobs:
         with:
           name: release-jars
           path: artifacts
-      
+
       - name: Publish to Modrinth
         uses: Kir-Antipov/modrinth-action@v2
         with:
@@ -131,7 +133,7 @@ jobs:
           project-id: ${{ env.MODRINTH_PROJECT_ID }}
           version: ${{ needs.build.outputs.version }}
           name: "CatSkinC ${{ needs.build.outputs.version }}"
-          changelog: ${{ needs.extract-changelog.outputs.changelog }}
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
           files: |
             artifacts/catskinc-*.jar
           dependencies: |
@@ -151,13 +153,13 @@ jobs:
         with:
           name: release-jars
           path: artifacts
-      
+
       - name: Publish to CurseForge
         uses: WispProxy/CurseForge-Github-Action@v1
         with:
           api-key: ${{ secrets.CURSEFORGE_TOKEN }}
-          project-id: ${{ secrets.CURSEFORGE_PROJECT_ID }}
-          changelog: ${{ needs.extract-changelog.outputs.changelog }}
+          project-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
           changelog-type: markdown
           files: |
             artifacts/catskinc-*.jar
@@ -170,10 +172,24 @@ jobs:
           release-type: release
 
   notify:
-    needs: [publish-modrinth, publish-curseforge]
-    if: ${{ inputs.notify }}
+    needs: [build, publish-modrinth, publish-curseforge]
+    # Run whenever the user asked for notifications, even if one of the
+    # publish jobs was skipped (because its input flag was false) — only
+    # bail out if a publish job that DID run actually failed.
+    if: >
+      ${{
+        always() &&
+        inputs.notify &&
+        (needs.publish-modrinth.result == 'success' || needs.publish-modrinth.result == 'skipped') &&
+        (needs.publish-curseforge.result == 'success' || needs.publish-curseforge.result == 'skipped')
+      }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-jars
+          path: artifacts
+
       - name: Discord Notification
         if: ${{ secrets.DISCORD_WEBHOOK != '' }}
         run: |
@@ -192,13 +208,13 @@ jobs:
                 ]
               }]
             }'
-      
+
       - name: GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ needs.build.outputs.version }}
           name: CatSkinC ${{ needs.build.outputs.version }}
-          body: ${{ needs.extract-changelog.outputs.changelog }}
+          body: ${{ needs['extract-changelog'].outputs.changelog }}
           files: artifacts/catskinc-*.jar
           draft: false
           prerelease: false
