@@ -276,8 +276,8 @@ jobs:
       - name: GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ needs.build.outputs.version }}
-          name: CatSkinC ${{ needs.build.outputs.version }}
+          tag_name: v${{ needs.build.outputs.version }}-1.21.1
+          name: CatSkinC 1.21.1 v${{ needs.build.outputs.version }}
           body: ${{ needs['extract-changelog'].outputs.changelog }}
           files: artifacts/catskinc-*.jar
           draft: false
