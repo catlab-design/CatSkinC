@@ -247,14 +247,14 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{
               "embeds": [{
-                "title": "CatSkinC ${{ needs.build.outputs.version }} Released!",
-                "description": "Published to Modrinth & CurseForge for Minecraft ${{ needs.build.outputs.mc_version }}",
+                "title": "CatSkinC ${{ needs.build.outputs.version }} ปล่อยแล้ว! 🚀",
+                "description": "เผยแพร่ไปยัง Modrinth และ CurseForge สำหรับ Minecraft ${{ needs.build.outputs.mc_version }} เรียบร้อย",
                 "color": 5814783,
                 "fields": [
-                  {"name": "Version", "value": "${{ needs.build.outputs.version }}", "inline": true},
-                  {"name": "MC Version", "value": "${{ needs.build.outputs.mc_version }}", "inline": true},
-                  {"name": "Modrinth", "value": "https://modrinth.com/mod/catskinc/version/${{ needs.build.outputs.version }}", "inline": false},
-                  {"name": "CurseForge", "value": "https://www.curseforge.com/minecraft/mc-mods/catskinc/files/${{ needs.build.outputs.version }}", "inline": false}
+                  {"name": "เวอร์ชันมอด", "value": "${{ needs.build.outputs.version }}", "inline": true},
+                  {"name": "เวอร์ชัน Minecraft", "value": "${{ needs.build.outputs.mc_version }}", "inline": true},
+                  {"name": "ดาวน์โหลดบน Modrinth", "value": "https://modrinth.com/mod/catskinc/version/${{ needs.build.outputs.version }}", "inline": false},
+                  {"name": "ดาวน์โหลดบน CurseForge", "value": "https://www.curseforge.com/minecraft/mc-mods/catskinc/files/${{ needs.build.outputs.version }}", "inline": false}
                 ]
               }]
             }'
