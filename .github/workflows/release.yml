@@ -120,13 +120,17 @@ jobs:
     if: ${{ inputs.publish_modrinth }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      fabric_url: ${{ steps.modrinth_fabric.outputs.modrinth-url }}
+      forge_url: ${{ steps.modrinth_forge.outputs.modrinth-url }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: release-jars
           path: artifacts
 
-      - name: Publish Fabric build to Modrinth
+      - id: modrinth_fabric
+        name: Publish Fabric build to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
@@ -148,7 +152,8 @@ jobs:
             dependency-2(optional){modrinth:554908}
             dependency-3(optional){modrinth:420372}
 
-      - name: Publish Forge build to Modrinth
+      - id: modrinth_forge
+        name: Publish Forge build to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
@@ -172,13 +177,17 @@ jobs:
     if: ${{ inputs.publish_curseforge }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      fabric_url: ${{ steps.curseforge_fabric.outputs.curseforge-url }}
+      forge_url: ${{ steps.curseforge_forge.outputs.curseforge-url }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: release-jars
           path: artifacts
 
-      - name: Publish Fabric build to CurseForge
+      - id: curseforge_fabric
+        name: Publish Fabric build to CurseForge
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
@@ -200,7 +209,8 @@ jobs:
             dependency-2(optional){curseforge:554908}
             dependency-3(optional){curseforge:420372}
 
-      - name: Publish Forge build to CurseForge
+      - id: curseforge_forge
+        name: Publish Forge build to CurseForge
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
@@ -253,8 +263,10 @@ jobs:
                 "fields": [
                   {"name": "เวอร์ชันมอด", "value": "${{ needs.build.outputs.version }}", "inline": true},
                   {"name": "เวอร์ชัน Minecraft", "value": "${{ needs.build.outputs.mc_version }}", "inline": true},
-                  {"name": "ดาวน์โหลดบน Modrinth", "value": "https://modrinth.com/mod/catskinc/version/${{ needs.build.outputs.version }}", "inline": false},
-                  {"name": "ดาวน์โหลดบน CurseForge", "value": "https://www.curseforge.com/minecraft/mc-mods/catskinc/files/${{ needs.build.outputs.version }}", "inline": false}
+                  {"name": "Modrinth (Fabric)", "value": "${{ needs['publish-modrinth'].outputs.fabric_url || 'ไม่ได้เผยแพร่' }}", "inline": false},
+                  {"name": "Modrinth (Forge)", "value": "${{ needs['publish-modrinth'].outputs.forge_url || 'ไม่ได้เผยแพร่' }}", "inline": false},
+                  {"name": "CurseForge (Fabric)", "value": "${{ needs['publish-curseforge'].outputs.fabric_url || 'ไม่ได้เผยแพร่' }}", "inline": false},
+                  {"name": "CurseForge (Forge)", "value": "${{ needs['publish-curseforge'].outputs.forge_url || 'ไม่ได้เผยแพร่' }}", "inline": false}
                 ]
               }]
             }'
