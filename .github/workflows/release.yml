@@ -186,6 +186,8 @@ jobs:
         (needs.publish-curseforge.result == 'success' || needs.publish-curseforge.result == 'skipped')
       }}
     runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -193,9 +195,9 @@ jobs:
           path: artifacts
 
       - name: Discord Notification
-        if: ${{ secrets.DISCORD_WEBHOOK != '' }}
+        if: ${{ env.DISCORD_WEBHOOK != '' }}
         run: |
-          curl -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
+          curl -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
             -d '{
               "embeds": [{
