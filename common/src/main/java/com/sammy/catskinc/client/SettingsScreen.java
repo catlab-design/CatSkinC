@@ -22,6 +22,7 @@ public final class SettingsScreen extends Screen {
     private String searchQuery = "";
     
     private boolean generalExpanded = true;
+    private boolean myopiaExpanded = true;
     private boolean toastsExpanded = true;
 
     private static final class SettingItem {
@@ -126,6 +127,7 @@ public final class SettingsScreen extends Screen {
     @Override
     public void render(GuiGraphics drawContext, int mouseX, int mouseY, float delta) {
         // Keep world background visible; no full-screen dark overlay (consistent with SkinUploadScreen)
+        this.hasRequestSigningKeySetting = false;
         
         // Draw top tab bar
         this.renderTabs(drawContext, mouseX, mouseY, false);
@@ -170,7 +172,7 @@ public final class SettingsScreen extends Screen {
         boolean hasIpSetting = false;
 
         // Render categories & items
-        String[] categories = {"General", "Myopia", "Toasts"};
+        String[] categories = categories();
         for (String category : categories) {
             // Check if there are matching settings in this category
             List<SettingItem> categorySettings = new ArrayList<>();
@@ -186,7 +188,7 @@ public final class SettingsScreen extends Screen {
                 continue;
             }
 
-            boolean expanded = category.equals("General") ? generalExpanded : toastsExpanded;
+            boolean expanded = isCategoryExpanded(category);
             boolean forceExpand = !searchQuery.isEmpty();
             boolean showArrowDown = expanded || forceExpand;
 
@@ -235,12 +237,14 @@ public final class SettingsScreen extends Screen {
                         drawContext.drawString(this.font, Component.literal(currentLabel), dropdownX + (dropdownW - textW) / 2, y + 4, -1);
                         // Draw dropdown arrow
                         drawContext.drawString(this.font, Component.literal("▼"), dropdownX + dropdownW - 16, y + 4, -1);
-} else if (item.key.equals("requestSigningKey")) {
+                    } else if (item.key.equals("requestSigningKey")) {
                         hasRequestSigningKeySetting = true;
                         this.requestSigningKeyEditBox.setX(this.panelX + 120);
                         this.requestSigningKeyEditBox.setY(y);
                         this.requestSigningKeyEditBox.setWidth(this.panelW - 220);
                         this.requestSigningKeyEditBox.visible = true;
+                        drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
                     } else if (item.key.equals("myopiaEnabled")) {
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
                         drawToggleSwitch(drawContext, mouseX, mouseY, rightOffset - 90, y,
@@ -372,7 +376,7 @@ public final class SettingsScreen extends Screen {
 
             // 2. Settings categories click detection
             int y = this.panelY + 48;
-            String[] categories = {"General", "Toasts"};
+            String[] categories = categories();
             for (String category : categories) {
                 List<SettingItem> categorySettings = new ArrayList<>();
                 for (SettingItem item : settings) {
@@ -387,7 +391,7 @@ public final class SettingsScreen extends Screen {
                     continue;
                 }
 
-                boolean expanded = category.equals("General") ? generalExpanded : toastsExpanded;
+                boolean expanded = isCategoryExpanded(category);
                 boolean forceExpand = !searchQuery.isEmpty();
                 boolean showArrowDown = expanded || forceExpand;
 
@@ -395,11 +399,7 @@ public final class SettingsScreen extends Screen {
                 if (mouseX >= this.panelX + 15 && mouseX < this.panelX + this.panelW - 15 && mouseY >= y && mouseY < y + 14) {
                     ModSounds.playClick();
                     if (!forceExpand) {
-                        if (category.equals("General")) {
-                            generalExpanded = !generalExpanded;
-                        } else {
-                            toastsExpanded = !toastsExpanded;
-                        }
+                        setCategoryExpanded(category, !expanded);
                     }
                     return true;
                 }
@@ -460,13 +460,7 @@ public final class SettingsScreen extends Screen {
                                 saveAndApply();
                                 return true;
                             }
-} else if (item.key.equals("requestSigningKey")) {
-                        hasRequestSigningKeySetting = true;
-                        this.requestSigningKeyEditBox.setX(this.panelX + 120);
-                        this.requestSigningKeyEditBox.setY(y);
-                        this.requestSigningKeyEditBox.setWidth(this.panelW - 220);
-                        this.requestSigningKeyEditBox.visible = true;
-                    } else if (item.key.equals("myopiaEnabled")) {
+                        } else if (item.key.equals("myopiaEnabled")) {
                             int toggleX = rightOffset - 90;
                             int resetX = rightOffset - 40;
                             if (mouseX >= toggleX && mouseX < toggleX + 40 && mouseY >= y && mouseY < y + 16) {
@@ -566,6 +560,27 @@ public final class SettingsScreen extends Screen {
         }
     }
 
+    private static String[] categories() {
+        return new String[] {"General", "Myopia", "Toasts"};
+    }
+
+    private boolean isCategoryExpanded(String category) {
+        return switch (category) {
+            case "General" -> generalExpanded;
+            case "Myopia" -> myopiaExpanded;
+            case "Toasts" -> toastsExpanded;
+            default -> false;
+        };
+    }
+
+    private void setCategoryExpanded(String category, boolean expanded) {
+        switch (category) {
+            case "General" -> generalExpanded = expanded;
+            case "Myopia" -> myopiaExpanded = expanded;
+            case "Toasts" -> toastsExpanded = expanded;
+        }
+    }
+
     private void toggleSetting(String key) {
         ModConfig config = ModConfig.get();
         switch (key) {
@@ -622,4 +637,3 @@ public final class SettingsScreen extends Screen {
         // Keep world background visible without vignette (consistent with SkinUploadScreen)
     }
 }
-

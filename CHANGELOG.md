@@ -2,6 +2,13 @@
 
 All notable changes to this project should be documented in this file.
 
+## [4.0.1] - 2026-09-25
+
+### Fixed
+
+- Fixed the Myopia settings category so it can be expanded and its controls respond to clicks.
+- Fixed the Request Signing Key row label and reset button, and hide its input when General is collapsed.
+
 ## [4.0.0] - 2026-08-29
 
 ### Added
