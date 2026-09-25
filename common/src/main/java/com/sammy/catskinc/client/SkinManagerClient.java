@@ -26,7 +26,7 @@ public final class SkinManagerClient {
     private static final Map<UUID, NativeImage> TALKING_IMAGES = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> SLIM = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> PREFERRED_SLIM = new ConcurrentHashMap<>();
-    private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
+    private static final FetchCoordinator<UUID> FETCH_COORDINATOR = new FetchCoordinator<>();
     private static final Map<UUID, Long> LAST_CHECK = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
@@ -176,16 +176,12 @@ public final class SkinManagerClient {
             return;
         }
         LAST_CHECK.remove(uuid);
-        if (!SKIN_IMAGES.containsKey(uuid)) {
-            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
-            long now = System.currentTimeMillis();
-            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
-                FAST_RETRY_SCHEDULED.put(uuid, now);
-                fetchAndApplyFor(uuid);
-            }
-        } else {
-            fetchAndApplyFor(uuid);
+        FAST_RETRY_SCHEDULED.remove(uuid);
+        ServerApiClient.invalidateSelectedCache(uuid);
+        if (!FETCH_COORDINATOR.force(uuid)) {
+            return;
         }
+        fetchAndApplyForStarted(uuid);
     }
 
     public static void refresh(UUID uuid) {
@@ -211,12 +207,16 @@ public final class SkinManagerClient {
     }
 
     public static void fetchAndApplyFor(UUID uuid) {
-        if (uuid == null || !IN_FLIGHT.add(uuid)) {
+        if (uuid == null || !FETCH_COORDINATOR.tryStart(uuid)) {
             if (uuid != null) {
                 ModLog.trace("Fetch skipped (already in flight): {}", uuid);
             }
             return;
         }
+        fetchAndApplyForStarted(uuid);
+    }
+
+    private static void fetchAndApplyForStarted(UUID uuid) {
         ModLog.trace("Fetch queued for {}", uuid);
 
         CompletableFuture<ServerApiClient.SelectedSkin> selected = ServerApiClient.fetchSelectedAsync(uuid);
@@ -255,13 +255,14 @@ public final class SkinManagerClient {
                             mouthOpenImage,
                             mouthOpenRequested));
         }).whenCompleteAsync((images, throwable) -> {
-            IN_FLIGHT.remove(uuid);
             if (throwable != null) {
                 ModLog.error("Skin apply failed for uuid=" + uuid, throwable);
+                finishFetch(uuid);
                 return;
             }
             if (images == null) {
                 ModLog.trace("No texture update for {}", uuid);
+                finishFetch(uuid);
                 return;
             }
             LAST_CHECK.put(uuid, System.currentTimeMillis());
@@ -271,9 +272,11 @@ public final class SkinManagerClient {
                 ModLog.trace("Client not ready; dropping texture update for {}", uuid);
                 closeQuietly(images.skinImage);
                 closeQuietly(images.mouthOpenImage);
+                finishFetch(uuid);
                 return;
             }
             RENDER_PREP_EXECUTOR.execute(() -> {
+                try {
                 Minecraft renderClient = Minecraft.getInstance();
                 if (renderClient == null) {
                     ModLog.trace("Client not ready; dropping texture update for {}", uuid);
@@ -321,8 +324,19 @@ public final class SkinManagerClient {
                 }
 
                 ModLog.trace("Texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
+                } finally {
+                    finishFetch(uuid);
+                }
             });
         }, DOWNLOAD_EXECUTOR);
+    }
+
+    private static void finishFetch(UUID uuid) {
+        if (FETCH_COORDINATOR.finish(uuid)) {
+            LAST_CHECK.remove(uuid);
+            ServerApiClient.invalidateSelectedCache(uuid);
+            fetchAndApplyForStarted(uuid);
+        }
     }
 
     public static Boolean isSlimOrNull(UUID uuid) {
@@ -359,7 +373,7 @@ public final class SkinManagerClient {
         LAST_CHECK.clear();
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
-        IN_FLIGHT.clear();
+        FETCH_COORDINATOR.clear();
         FAST_RETRY_SCHEDULED.clear();
         INJECTED_IMAGE_HASH.clear();
         restoreAllPixels();
@@ -662,7 +676,7 @@ public final class SkinManagerClient {
         LAST_CHECK.clear();
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
-        IN_FLIGHT.clear();
+        FETCH_COORDINATOR.clear();
         refreshIntervalMs = 5_000L;
         FAST_RETRY_SCHEDULED.clear();
         INJECTED_IMAGE_HASH.clear();

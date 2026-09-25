@@ -2,6 +2,15 @@
 
 All notable changes to this project should be documented in this file.
 
+## [4.1.0] - 2026-09-25
+
+### Fixed
+
+- Skin update events now bypass the short-lived selected-skin cache, so changed
+  skins are fetched immediately instead of waiting for the cache to expire.
+- Force-refresh events received during an active fetch are coalesced into a
+  follow-up fetch; late responses can no longer restore stale cached selections.
+
 ## [4.0.1] - 2026-09-25
 
 ### Fixed
