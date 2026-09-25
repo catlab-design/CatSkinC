@@ -28,14 +28,14 @@ Go to: **Repository Settings → Secrets and variables → Actions → New repos
 ## Artifact Naming
 
 Output files will be named:
-- `catskinc-fabric_1.20.1-4.0.0.jar`
-- `catskinc-forge_1.20.1-4.0.0.jar`
+- `catskinc-fabric_1.20.1-4.1.0.jar`
+- `catskinc-forge_1.20.1-4.1.0.jar`
 
 ## Version Source
 
 Version is read from `gradle.properties`:
 ```properties
-mod_version=4.0.0
+mod_version=4.1.0
 ```
 
 To override: specify `version` input when running workflow.

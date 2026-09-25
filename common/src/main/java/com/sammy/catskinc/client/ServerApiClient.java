@@ -184,6 +184,7 @@ public final class ServerApiClient {
     private static volatile boolean wsStop;
 
     private static final ConcurrentHashMap<UUID, CachedSelected> SELECTED_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, Long> SELECTED_CACHE_EPOCH = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, CompletableFuture<SelectedSkin>> SELECTED_IN_FLIGHT = new ConcurrentHashMap<>();
     private static volatile CachedPing cachedPing;
 
@@ -708,6 +709,7 @@ public final class ServerApiClient {
         }
 
         RuntimeConfig cfg = runtimeConfig();
+        long cacheEpoch = SELECTED_CACHE_EPOCH.computeIfAbsent(playerUuid, ignored -> 0L);
 
         CachedSelected cached = SELECTED_CACHE.get(playerUuid);
         if (cached != null && (now - cached.cachedAtMs) <= cfg.selectedCacheTtlMs) {
@@ -766,7 +768,13 @@ public final class ServerApiClient {
                         jsonString(body, "mouthCloseUrl"));
                 boolean slim = jsonBoolean(body, "slim", false);
                 SelectedSkin selectedSkin = new SelectedSkin(url, mouthOpenUrl, mouthCloseUrl, slim);
-                SELECTED_CACHE.put(playerUuid, new CachedSelected(selectedSkin, System.currentTimeMillis()));
+                SELECTED_CACHE_EPOCH.compute(playerUuid, (ignored, currentEpoch) -> {
+                    if (currentEpoch != null && currentEpoch == cacheEpoch) {
+                        SELECTED_CACHE.put(playerUuid,
+                                new CachedSelected(selectedSkin, System.currentTimeMillis()));
+                    }
+                    return currentEpoch;
+                });
                 ModLog.trace("Fetch selected ok: uuid={}, slim={}, url={}, mouthOpen={}, mouthClose={}",
                         playerUuid, slim, url, mouthOpenUrl, mouthCloseUrl);
                 return selectedSkin;
@@ -784,9 +792,12 @@ public final class ServerApiClient {
             } finally {
                 disconnectQuietly(connection);
             }
-        }, EXECUTOR).whenComplete((ignored, throwable) -> SELECTED_IN_FLIGHT.remove(playerUuid));
+        }, EXECUTOR);
 
         CompletableFuture<SelectedSkin> existing = SELECTED_IN_FLIGHT.putIfAbsent(playerUuid, created);
+        if (existing == null) {
+            created.whenComplete((ignored, throwable) -> SELECTED_IN_FLIGHT.remove(playerUuid, created));
+        }
         return existing != null ? existing : created;
     }
 
@@ -1289,11 +1300,14 @@ public final class ServerApiClient {
         return future;
     }
 
-    private static void invalidateSelectedCache(UUID uuid) {
+    static void invalidateSelectedCache(UUID uuid) {
         if (uuid == null) {
             return;
         }
-        SELECTED_CACHE.remove(uuid);
+        SELECTED_CACHE_EPOCH.compute(uuid, (ignored, epoch) -> {
+            SELECTED_CACHE.remove(uuid);
+            return epoch == null ? 1L : epoch + 1L;
+        });
         SELECTED_IN_FLIGHT.remove(uuid);
         PENDING_SELECTIONS.remove(uuid);
     }
@@ -1732,6 +1746,7 @@ public final class ServerApiClient {
     static void resetForTesting() {
         authToken = null;
         SELECTED_CACHE.clear();
+        SELECTED_CACHE_EPOCH.clear();
         SELECTED_IN_FLIGHT.clear();
         cachedPing = null;
         consecutiveFailures.set(0);
