@@ -144,13 +144,10 @@ jobs:
             fabric
           game-versions: |
             ${{ needs.build.outputs.mc_version }}
-          # NOTE: these IDs were carried over from the original workflow —
-          # please confirm they're the correct Modrinth project IDs/slugs
-          # for these three dependencies before relying on this.
           dependencies: |
-            dependency-1(required){modrinth:396111}
-            dependency-2(optional){modrinth:554908}
-            dependency-3(optional){modrinth:420372}
+            architectury-api(required){modrinth:lhGA9TYQ}
+            simple-voice-chat(optional){modrinth:9eGKb6K1}
+            plasmo-voice(optional){modrinth:1bZhdhsH}
 
       - id: modrinth_forge
         name: Publish Forge build to Modrinth
@@ -168,9 +165,9 @@ jobs:
           game-versions: |
             ${{ needs.build.outputs.mc_version }}
           dependencies: |
-            dependency-1(required){modrinth:396111}
-            dependency-2(optional){modrinth:554908}
-            dependency-3(optional){modrinth:420372}
+            architectury-api(required){modrinth:lhGA9TYQ}
+            simple-voice-chat(optional){modrinth:9eGKb6K1}
+            plasmo-voice(optional){modrinth:1bZhdhsH}
 
   publish-curseforge:
     needs: [build, extract-changelog]
@@ -201,13 +198,10 @@ jobs:
             fabric
           game-versions: |
             ${{ needs.build.outputs.mc_version }}
-          # NOTE: these IDs were carried over from the original workflow —
-          # please confirm they're the correct CurseForge project IDs
-          # for these three dependencies before relying on this.
           dependencies: |
-            dependency-1(required){curseforge:396111}
-            dependency-2(optional){curseforge:554908}
-            dependency-3(optional){curseforge:420372}
+            architectury-api(required){curseforge:419699}
+            simple-voice-chat(optional){curseforge:416089}
+            plasmo-voice(optional){curseforge:467028}
 
       - id: curseforge_forge
         name: Publish Forge build to CurseForge
@@ -225,9 +219,9 @@ jobs:
           game-versions: |
             ${{ needs.build.outputs.mc_version }}
           dependencies: |
-            dependency-1(required){curseforge:396111}
-            dependency-2(optional){curseforge:554908}
-            dependency-3(optional){curseforge:420372}
+            architectury-api(required){curseforge:419699}
+            simple-voice-chat(optional){curseforge:416089}
+            plasmo-voice(optional){curseforge:467028}
 
   notify:
     needs: [build, publish-modrinth, publish-curseforge]
