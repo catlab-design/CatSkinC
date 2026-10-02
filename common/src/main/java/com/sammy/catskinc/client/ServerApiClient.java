@@ -100,7 +100,7 @@ public final class ServerApiClient {
     private static final ProgressListener NO_OP_PROGRESS = new ProgressListener() {
     };
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
-    private static final String DEFAULT_BASE_URL = "https://storage-api.catskin.space";
+    private static final String DEFAULT_BASE_URL = "https://storage-skin.catlabdesign.space";
     private static final String DEFAULT_PATH_UPLOAD = "/upload";
     private static final String DEFAULT_PATH_SELECT = "/select";
     private static final String DEFAULT_PATH_SELECTED = "/selected";

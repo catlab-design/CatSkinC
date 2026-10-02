@@ -12,7 +12,7 @@ public final class ModConfig {
     private static File configFile;
 
     // Default configuration values
-    private String catskinCloudIp = "storage-api.catskin.space";
+    private String catskinCloudIp = "storage-skin.catlabdesign.space";
     private boolean showConnectionToast = true;
     private boolean showUploadToast = true;
     private boolean showInfoToast = true;
@@ -90,7 +90,7 @@ public final class ModConfig {
 
     // Getters & Setters
     public String getCatskinCloudIp() {
-        return catskinCloudIp == null ? "https://storage-api.catskin.space" : catskinCloudIp;
+        return catskinCloudIp == null ? "https://storage-skin.catlabdesign.space" : catskinCloudIp;
     }
 
     public void setCatskinCloudIp(String catskinCloudIp) {

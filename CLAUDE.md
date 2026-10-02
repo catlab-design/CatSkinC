@@ -152,7 +152,7 @@ Mixin injection: AbstractClientPlayerEntityMixin120 @Inject at getSkin() RETURN
 
 **Runtime config file:** `config/catskinc.json` (same as 1.20.1)
 
-**API endpoints (default):** `https://storage-api.catskin.space`
+**API endpoints (default):** `https://storage-skin.catlabdesign.space`
 
 **Security headers:** `x-catskinc-request-id`, `x-catskinc-content-sha256`, `x-catskinc-timestamp`, `x-catskinc-nonce`, `x-catskinc-signature`
 
