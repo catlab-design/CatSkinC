@@ -23,7 +23,7 @@ import java.util.concurrent.Executors;
 
 public final class ModrinthVersionChecker {
     private static final String DEFAULT_PATH_VERSION_CHECK = "/version/check";
-    private static final String DEFAULT_BASE_URL = "https://storage-api.catskin.space";
+    private static final String DEFAULT_BASE_URL = "https://storage-skin.catlabdesign.space";
     /// Modrinth API used to resolve the exact downloadable file for a version.
     private static final String MODRINTH_API_BASE = "https://api.modrinth.com/v2";
     private static final String MODRINTH_PROJECT_SLUG = "catskinc";

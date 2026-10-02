@@ -186,7 +186,7 @@ All notable changes to this project should be documented in this file.
 
 ### Changed
 
-- Default storage backend now points to `https://storage-api.catskin.space`.
+- Default storage backend now points to `https://storage-skin.catlabdesign.space`.
 - Skin uploads now keep a reusable local Library/history with thumbnails, quick reselect, and delete actions.
 - Join flow now reports cloud connection status in-game and refreshes player skin state more reliably.
 - CatSkinC `2.0.0` is now aligned across Minecraft `1.20.1` and `1.21.1` release lines.

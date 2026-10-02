@@ -487,8 +487,8 @@ public final class SettingsScreen extends Screen {
                             int resetX = rightOffset - 40;
                             if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
                                 ModSounds.playClick();
-                                config.setCatskinCloudIp("storage-api.catskin.space");
-                                this.ipTextField.setText("storage-api.catskin.space");
+                                config.setCatskinCloudIp("storage-skin.catlabdesign.space");
+                                this.ipTextField.setText("storage-skin.catlabdesign.space");
                                 saveAndApply();
                                 return true;
                             }

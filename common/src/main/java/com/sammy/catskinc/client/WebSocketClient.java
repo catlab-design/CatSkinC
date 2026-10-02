@@ -80,7 +80,7 @@ public final class WebSocketClient {
     }
 
     public static class Builder {
-        private String baseUrl = "https://storage-api.catskin.space";
+        private String baseUrl = "https://storage-skin.catlabdesign.space";
         private String requestSigningKey = "";
         private int timeoutMs = DEFAULT_TIMEOUT_SECONDS * 1000;
         private Listener listener = new Listener() {};

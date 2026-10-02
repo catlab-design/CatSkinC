@@ -160,7 +160,7 @@ ServerApiClient.startSse()
 
 ```json
 {
-  "catskinCloudIp": "storage-api.catskin.space",
+  "catskinCloudIp": "storage-skin.catlabdesign.space",
   "showConnectionToast": true,
   "showUploadToast": true,
   "showInfoToast": true,
@@ -188,12 +188,12 @@ variants; all menus keep full-resolution skins.
 - `-Dcatskinc.dev=true`
 
 **API endpoints (hardcoded defaults):**
-- `https://storage-api.catskin.space/upload` — skin upload
-- `https://storage-api.catskin.space/select` — skin selection
-- `https://storage-api.catskin.space/selected` — get selected
-- `https://storage-api.catskin.space/public/{id}/skin.png` — public asset
-- `https://storage-api.catskin.space/events` — SSE stream
-- `https://storage-api.catskin.space/version/check` — update check
+- `https://storage-skin.catlabdesign.space/upload` — skin upload
+- `https://storage-skin.catlabdesign.space/select` — skin selection
+- `https://storage-skin.catlabdesign.space/selected` — get selected
+- `https://storage-skin.catlabdesign.space/public/{id}/skin.png` — public asset
+- `https://storage-skin.catlabdesign.space/events` — SSE stream
+- `https://storage-skin.catlabdesign.space/version/check` — update check
 
 ---
 
