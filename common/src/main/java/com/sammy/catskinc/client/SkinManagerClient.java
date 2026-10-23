@@ -410,7 +410,14 @@ public final class SkinManagerClient {
             return;
         }
         AbstractTexture tex = client.getTextureManager().getTexture(vanillaId);
-        if (tex instanceof DynamicTexture dynTex) {
+        // Our own per-UUID texture is sized for the previous skin; if the new skin's size differs
+        // (e.g. 64x64 -> HD), recreate it below instead of squashing the new skin into it.
+        boolean ownedSizeMismatch = FALLBACK_TEXTURES.contains(uuid)
+                && tex instanceof DynamicTexture owned
+                && owned.getPixels() != null
+                && (owned.getPixels().getWidth() != source.getWidth()
+                        || owned.getPixels().getHeight() != source.getHeight());
+        if (tex instanceof DynamicTexture dynTex && !ownedSizeMismatch) {
             NativeImage target = dynTex.getPixels();
             if (target == null) {
                 return;
