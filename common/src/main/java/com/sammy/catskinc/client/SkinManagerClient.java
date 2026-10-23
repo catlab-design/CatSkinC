@@ -407,7 +407,14 @@ public final class SkinManagerClient {
             return;
         }
         AbstractTexture tex = client.getTextureManager().getTexture(vanillaId);
-        if (tex instanceof NativeImageBackedTexture nibTex) {
+        // Our own per-UUID texture is sized for the previous skin; if the new skin's size differs
+        // (e.g. 64x64 -> HD), recreate it below instead of squashing the new skin into it.
+        boolean ownedSizeMismatch = FALLBACK_TEXTURES.contains(uuid)
+                && tex instanceof NativeImageBackedTexture owned
+                && owned.getImage() != null
+                && (owned.getImage().getWidth() != source.getWidth()
+                        || owned.getImage().getHeight() != source.getHeight());
+        if (tex instanceof NativeImageBackedTexture nibTex && !ownedSizeMismatch) {
             NativeImage target = nibTex.getImage();
             if (target == null) {
                 return;
