@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 public final class SettingsScreen extends Screen {
     private int panelX;
@@ -38,7 +39,8 @@ public final class SettingsScreen extends Screen {
     }
 
     private final List<SettingItem> settings = List.of(
-        new SettingItem("catskinCloudIp", "CatSkinCloud IP", "General"),
+        new SettingItem("serverMode", "CatSkinCloud Server", "General"),
+        new SettingItem("catskinCloudIp", "Custom Server IP", "General"),
         new SettingItem("connectionMode", "Connection Mode", "General"),
         new SettingItem("requestSigningKey", "Request Signing Key", "General"),
         new SettingItem("myopiaEnabled", "Enabled", "Myopia"),
@@ -101,9 +103,9 @@ public final class SettingsScreen extends Screen {
 
         this.ipEditBox = new EditBox(this.font, this.panelX + 120, this.panelY + 52, this.panelW - 220, 16, Component.literal("CatSkinCloud IP"));
         this.ipEditBox.setMaxLength(128);
-        this.ipEditBox.setValue(ModConfig.get().getCatskinCloudIp());
+        this.ipEditBox.setValue(ModConfig.get().getCustomServerIp());
         this.ipEditBox.setResponder(value -> {
-            ModConfig.get().setCatskinCloudIp(value);
+            ModConfig.get().setCustomServerIp(value);
             ModConfig.save();
         });
         this.addRenderableWidget(this.ipEditBox);
@@ -177,7 +179,7 @@ public final class SettingsScreen extends Screen {
             // Check if there are matching settings in this category
             List<SettingItem> categorySettings = new ArrayList<>();
             for (SettingItem item : settings) {
-                if (item.category.equals(category)) {
+                if (item.category.equals(category) && isSettingVisible(item)) {
                     if (searchQuery.isEmpty() || item.label.toLowerCase(Locale.ROOT).contains(searchQuery.toLowerCase(Locale.ROOT))) {
                         categorySettings.add(item);
                     }
@@ -198,7 +200,29 @@ public final class SettingsScreen extends Screen {
 
             if (showArrowDown) {
                 for (SettingItem item : categorySettings) {
-                    if (item.key.equals("catskinCloudIp")) {
+                    if (item.key.equals("serverMode")) {
+                        drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
+                        boolean global = ModConfig.get().getServerMode() == ModConfig.ServerMode.GLOBAL;
+                        if (global) {
+                            // Show which host Global currently resolves to
+                            int hostX = this.panelX + 120;
+                            int hostMaxW = (rightOffset - 150) - hostX;
+                            if (hostMaxW > 20) {
+                                drawContext.drawString(this.font,
+                                        Component.literal(ellipsis(GlobalServerResolver.currentHost(), hostMaxW)),
+                                        hostX, y + 4, 0xFF9A9A9A);
+                            }
+                        }
+                        drawDropdownButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100,
+                                global ? "Global" : "Custom");
+
+                        // Reload button: re-resolves Global and reconnects
+                        this.reloadButtonX = rightOffset - 40;
+                        this.reloadButtonY = y;
+                        this.reloadButtonW = 40;
+                        this.reloadButtonH = 16;
+                        drawRowButton(drawContext, mouseX, mouseY, this.reloadButtonX, y, this.reloadButtonW, this.reloadButtonH, "↻");
+                    } else if (item.key.equals("catskinCloudIp")) {
                         hasIpSetting = true;
                         this.ipEditBox.setX(this.panelX + 120);
                         this.ipEditBox.setY(y);
@@ -207,13 +231,6 @@ public final class SettingsScreen extends Screen {
 
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
-
-                        // Reload button next to IP field - same style as Reset button
-                        this.reloadButtonX = rightOffset - 85;
-                        this.reloadButtonY = y;
-                        this.reloadButtonW = 40;
-                        this.reloadButtonH = 16;
-                        drawRowButton(drawContext, mouseX, mouseY, this.reloadButtonX, y, this.reloadButtonW, this.reloadButtonH, "↻");
                     } else if (item.key.equals("connectionMode")) {
                         // Connection Mode dropdown
                         drawContext.drawString(this.font, Component.literal(item.label), this.panelX + 25, y + 4, -1);
@@ -380,7 +397,7 @@ public final class SettingsScreen extends Screen {
             for (String category : categories) {
                 List<SettingItem> categorySettings = new ArrayList<>();
                 for (SettingItem item : settings) {
-                    if (item.category.equals(category)) {
+                    if (item.category.equals(category) && isSettingVisible(item)) {
                         if (searchQuery.isEmpty() || item.label.toLowerCase(Locale.ROOT).contains(searchQuery.toLowerCase(Locale.ROOT))) {
                             categorySettings.add(item);
                         }
@@ -408,12 +425,17 @@ public final class SettingsScreen extends Screen {
                 if (showArrowDown) {
                     ModConfig config = ModConfig.get();
                     for (SettingItem item : categorySettings) {
-                        if (item.key.equals("catskinCloudIp")) {
-                            int resetX = rightOffset - 40;
-                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                        if (item.key.equals("serverMode")) {
+                            int dropdownX = rightOffset - 145;
+                            if (mouseX >= dropdownX && mouseX < dropdownX + 100 && mouseY >= y && mouseY < y + 16) {
                                 ModSounds.playClick();
-                                config.setCatskinCloudIp("storage-skin.catlabdesign.space");
-                                this.ipEditBox.setValue("storage-skin.catlabdesign.space");
+                                boolean toCustom = config.getServerMode() == ModConfig.ServerMode.GLOBAL;
+                                config.setServerMode(toCustom ? ModConfig.ServerMode.CUSTOM : ModConfig.ServerMode.GLOBAL);
+                                if (toCustom) {
+                                    this.ipEditBox.setValue(config.getCustomServerIp());
+                                } else {
+                                    GlobalServerResolver.refreshAsync();
+                                }
                                 saveAndApply();
                                 return true;
                             }
@@ -424,8 +446,12 @@ public final class SettingsScreen extends Screen {
                                 Toasts.ConnectionToast reconnectToast = Toasts.connection(
                                     Component.translatable("toast.catskinc.event.title"),
                                     Component.translatable("toast.catskinc.reconnecting"));
+                                // Re-resolve the Global server first so a changed servers.json is picked up
+                                CompletableFuture<?> resolved = config.getServerMode() == ModConfig.ServerMode.GLOBAL
+                                    ? GlobalServerResolver.refreshAsync()
+                                    : CompletableFuture.completedFuture(null);
                                 // Show result toast after reconnect attempt
-                                ServerApiClient.reconnect(event -> {})
+                                resolved.thenCompose(ignored -> ServerApiClient.reconnect(event -> {}))
                                     .whenComplete((connected, ex) -> {
                                         Minecraft mc = Minecraft.getInstance();
                                         if (mc != null && reconnectToast != null) {
@@ -438,6 +464,15 @@ public final class SettingsScreen extends Screen {
                                             });
                                         }
                                     });
+                                return true;
+                            }
+                        } else if (item.key.equals("catskinCloudIp")) {
+                            int resetX = rightOffset - 40;
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                config.setCustomServerIp(GlobalServerResolver.FALLBACK_HOST);
+                                this.ipEditBox.setValue(GlobalServerResolver.FALLBACK_HOST);
+                                saveAndApply();
                                 return true;
                             }
                         } else if (item.key.equals("connectionMode")) {
@@ -558,6 +593,28 @@ public final class SettingsScreen extends Screen {
             case "myopiaMode": return config.getMyopiaMode() == ModConfig.MyopiaMode.PANICKED;
             default: return false;
         }
+    }
+
+    /** The custom IP row only exists while the Custom server mode is selected. */
+    private static boolean isSettingVisible(SettingItem item) {
+        if (item.key.equals("catskinCloudIp")) {
+            return ModConfig.get().getServerMode() == ModConfig.ServerMode.CUSTOM;
+        }
+        return true;
+    }
+
+    private void drawDropdownButton(GuiGraphics drawContext, int mouseX, int mouseY, int x, int y, int w, String label) {
+        boolean hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + 16;
+        int bg = hover ? 0x55444444 : 0x3D232323;
+        int border = hover ? 1922734746 : 1670023818;
+        drawContext.fill(x, y, x + w, y + 16, bg);
+        drawContext.fill(x, y, x + w, y + 1, border);
+        drawContext.fill(x, y + 15, x + w, y + 16, border);
+        drawContext.fill(x, y + 1, x + 1, y + 15, border);
+        drawContext.fill(x + w - 1, y + 1, x + w, y + 15, border);
+        int textW = this.font.width(label);
+        drawContext.drawString(this.font, Component.literal(label), x + (w - textW) / 2, y + 4, -1);
+        drawContext.drawString(this.font, Component.literal("▼"), x + w - 16, y + 4, -1);
     }
 
     private static String[] categories() {
