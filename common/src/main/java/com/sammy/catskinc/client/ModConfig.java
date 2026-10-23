@@ -12,7 +12,10 @@ public final class ModConfig {
     private static File configFile;
 
     // Default configuration values
-    private String catskinCloudIp = "storage-skin.catlabdesign.space";
+    // GLOBAL resolves the host from servers.json; CUSTOM uses catskinCloudIp as typed by the user.
+    // Left null (not GLOBAL) so configs written before this field existed can be detected and migrated.
+    private ServerMode serverMode = null;
+    private String catskinCloudIp = "";
     private boolean showConnectionToast = true;
     private boolean showUploadToast = true;
     private boolean showInfoToast = true;
@@ -34,6 +37,16 @@ public final class ModConfig {
     public static final int MYOPIA_DISTANCE_MAX = 128;
     public static final int MYOPIA_DISTANCE_DEFAULT = 20;
     public static final int MYOPIA_DISTANCE_STEP = 5;
+
+    public enum ServerMode {
+        GLOBAL,     // Host published in servers.json (falls back to GlobalServerResolver.FALLBACK_HOST)
+        CUSTOM      // User-provided host in catskinCloudIp
+    }
+
+    /** Hosts shipped as defaults by older versions; configs still pointing at them move to GLOBAL. */
+    private static final java.util.Set<String> LEGACY_DEFAULT_HOSTS = java.util.Set.of(
+            "storage-api.catskin.space",
+            GlobalServerResolver.FALLBACK_HOST);
 
     public enum ConnectionMode {
         AUTO,       // Try WebSocket first, fallback to SSE on failure
@@ -68,10 +81,48 @@ public final class ModConfig {
             ModConfig loaded = GSON.fromJson(reader, ModConfig.class);
             if (loaded != null) {
                 instance = loaded;
+                if (instance.migrateServerMode()) {
+                    save();
+                }
             }
         } catch (Exception e) {
             ModLog.error("Failed to load config, using defaults", e);
         }
+    }
+
+    /**
+     * Configs written before server modes existed only have catskinCloudIp. Old default hosts become
+     * GLOBAL; anything else the user typed is kept as CUSTOM. Returns true when the config changed.
+     */
+    boolean migrateServerMode() {
+        if (serverMode != null) {
+            return false;
+        }
+        if (isLegacyDefaultHost(catskinCloudIp)) {
+            ModLog.info("Migrating CatSkinCloud server '{}' to Global", catskinCloudIp);
+            serverMode = ServerMode.GLOBAL;
+            catskinCloudIp = "";
+        } else {
+            ModLog.info("Keeping CatSkinCloud server '{}' as Custom", catskinCloudIp);
+            serverMode = ServerMode.CUSTOM;
+        }
+        return true;
+    }
+
+    static boolean isLegacyDefaultHost(String value) {
+        if (value == null || value.isBlank()) {
+            return true;
+        }
+        String host = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if (host.startsWith("https://")) {
+            host = host.substring("https://".length());
+        } else if (host.startsWith("http://")) {
+            host = host.substring("http://".length());
+        }
+        while (host.endsWith("/")) {
+            host = host.substring(0, host.length() - 1);
+        }
+        return LEGACY_DEFAULT_HOSTS.contains(host);
     }
 
     public static void save() {
@@ -90,12 +141,29 @@ public final class ModConfig {
     }
 
     // Getters & Setters
+    /** The host requests should go to, based on the selected server mode. */
     public String getCatskinCloudIp() {
-        return catskinCloudIp == null ? "https://storage-skin.catlabdesign.space" : catskinCloudIp;
+        if (getServerMode() == ServerMode.CUSTOM && catskinCloudIp != null && !catskinCloudIp.isBlank()) {
+            return catskinCloudIp;
+        }
+        return GlobalServerResolver.currentHost();
     }
 
-    public void setCatskinCloudIp(String catskinCloudIp) {
-        this.catskinCloudIp = catskinCloudIp;
+    public ServerMode getServerMode() {
+        return serverMode == null ? ServerMode.GLOBAL : serverMode;
+    }
+
+    public void setServerMode(ServerMode serverMode) {
+        this.serverMode = serverMode;
+    }
+
+    /** The user-typed custom host (only used when the server mode is CUSTOM). */
+    public String getCustomServerIp() {
+        return catskinCloudIp == null ? "" : catskinCloudIp;
+    }
+
+    public void setCustomServerIp(String customServerIp) {
+        this.catskinCloudIp = customServerIp;
     }
 
     public boolean isShowConnectionToast() {

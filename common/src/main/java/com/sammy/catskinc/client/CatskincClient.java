@@ -49,6 +49,8 @@ public final class CatskincClient {
             }
         } catch (Throwable ignored) {}
         ModConfig.init(gameDir);
+        // Resolve the Global server early so it's ready before the first join; falls back if unreachable.
+        GlobalServerResolver.refreshAsync();
 
         applyConfig();
         VoiceStateNetworkClient.init();
