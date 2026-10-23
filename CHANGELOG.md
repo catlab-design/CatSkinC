@@ -2,6 +2,23 @@
 
 All notable changes to this project should be documented in this file.
 
+## [4.1.1] - 2026-10-23
+
+### Added
+
+- **CatSkinCloud server selection** in Settings: choose **Global** (the server
+  published in CatSkinC-Data `servers.json`, falling back to
+  `storage-skin.catlabdesign.space` if it can't be fetched) or **Custom** (enter
+  any host). The ↻ button re-checks the Global server and reconnects.
+
+### Fixed
+
+- Configs from older versions that still pointed at the retired
+  `storage-api.catskin.space` server are moved to Global automatically, so
+  upgraded clients can connect again. Hosts you entered yourself are kept as Custom.
+- Switching to a skin of a different size mid-session (e.g. 64×64 → HD) no
+  longer squashes the new skin into the old texture until rejoining.
+
 ## [4.1.0] - 2026-09-25
 
 ### Fixed
