@@ -27,6 +27,17 @@ public final class SkinOverrideStore {
     }
 
     private static final Map<UUID, Entry> ENTRIES = new ConcurrentHashMap<>();
+    private static final Map<UUID, PendingInjection> PENDING_INJECTIONS = new ConcurrentHashMap<>();
+
+    private static final class PendingInjection {
+        final NativeImage image;
+        final boolean slim;
+
+        PendingInjection(NativeImage image, boolean slim) {
+            this.image = image;
+            this.slim = slim;
+        }
+    }
 
     private SkinOverrideStore() {
     }
@@ -54,6 +65,9 @@ public final class SkinOverrideStore {
         }
         Identifier vanillaId = SkinManagerClient.getVanillaIdentifier(uuid);
         if (vanillaId == null) {
+            // Queue for later injection when vanilla texture becomes available
+            PENDING_INJECTIONS.put(uuid, new PendingInjection(image, slim));
+            ModLog.trace("Queued pending managed injection for {}", uuid);
             return;
         }
         // Managed entries write directly into the vanilla texture (via injectPixels)
@@ -61,6 +75,20 @@ public final class SkinOverrideStore {
         SkinManagerClient.injectPixels(uuid, image);
         clear(uuid);
         ENTRIES.put(uuid, new Entry(vanillaId, slim, true));
+    }
+
+    // Called from SkinManagerClient.onSkinLookup when vanilla texture ID becomes available
+    public static void processPendingInjection(UUID uuid, Identifier vanillaId) {
+        if (uuid == null || vanillaId == null) {
+            return;
+        }
+        PendingInjection pending = PENDING_INJECTIONS.remove(uuid);
+        if (pending == null) {
+            return;
+        }
+        ModLog.trace("Processing pending managed injection for {}", uuid);
+        SkinManagerClient.injectPixels(uuid, pending.image);
+        ENTRIES.put(uuid, new Entry(vanillaId, pending.slim, true));
     }
 
     public static void putManagedFromFile(UUID uuid, File png, boolean slim) throws IOException {

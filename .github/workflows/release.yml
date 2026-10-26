@@ -1,0 +1,276 @@
+name: "Release CatSkinC"
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        type: choice
+        description: 'Branch to build (main=1.20.1)'
+        options: [main]
+        required: true
+      version:
+        description: 'Override version (optional, defaults to gradle.properties mod_version)'
+        required: false
+      publish_modrinth:
+        type: boolean
+        default: true
+        description: 'Publish to Modrinth'
+      publish_curseforge:
+        type: boolean
+        default: true
+        description: 'Publish to CurseForge'
+      notify:
+        type: boolean
+        default: true
+        description: 'Send notifications (Discord, GitHub Release)'
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+
+env:
+  MODRINTH_PROJECT_ID: catskinc
+  CURSEFORGE_PROJECT_ID: 1375958
+
+jobs:
+  build:
+    name: Build JARs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      mc_version: ${{ steps.mc_version.outputs.mc_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Determine MC version
+        id: mc_version
+        run: |
+          echo "mc_version=1.20.1" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build Fabric
+        run: ./gradlew :fabric:remapJar --no-daemon
+
+      - name: Build Forge
+        run: ./gradlew :forge:remapJar --no-daemon
+
+      - name: Rename artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MC_VERSION="${{ steps.mc_version.outputs.mc_version }}"
+
+          mv "fabric/build/libs/catskinc-fabric-${VERSION}.jar" \
+             "catskinc-fabric_${MC_VERSION}-${VERSION}.jar"
+
+          mv "forge/build/libs/catskinc-forge-${VERSION}.jar" \
+             "catskinc-forge_${MC_VERSION}-${VERSION}.jar"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-jars
+          path: |
+            catskinc-*.jar
+          retention-days: 7
+
+  extract-changelog:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.extract.outputs.changelog }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Extract changelog
+        id: extract
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          node .github/scripts/extract-changelog.js "${VERSION}" > changelog.md
+          echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+          cat changelog.md >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+  publish-modrinth:
+    needs: [build, extract-changelog]
+    if: ${{ inputs.publish_modrinth }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      fabric_url: ${{ steps.modrinth_fabric.outputs.modrinth-url }}
+      forge_url: ${{ steps.modrinth_forge.outputs.modrinth-url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-jars
+          path: artifacts
+
+      - id: modrinth_fabric
+        name: Publish Fabric build to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Fabric)"
+          version: "${{ needs.build.outputs.version }}+fabric"
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: |
+            artifacts/catskinc-fabric_*.jar
+          loaders: |
+            fabric
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
+          dependencies: |
+            architectury-api(required){modrinth:lhGA9TYQ}
+            simple-voice-chat(optional){modrinth:9eGKb6K1}
+            plasmo-voice(optional){modrinth:1bZhdhsH}
+
+      - id: modrinth_forge
+        name: Publish Forge build to Modrinth
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Forge)"
+          version: "${{ needs.build.outputs.version }}+forge"
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: |
+            artifacts/catskinc-forge_*.jar
+          loaders: |
+            forge
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
+          dependencies: |
+            architectury-api(required){modrinth:lhGA9TYQ}
+            simple-voice-chat(optional){modrinth:9eGKb6K1}
+            plasmo-voice(optional){modrinth:1bZhdhsH}
+
+  publish-curseforge:
+    needs: [build, extract-changelog]
+    if: ${{ inputs.publish_curseforge }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      fabric_url: ${{ steps.curseforge_fabric.outputs.curseforge-url }}
+      forge_url: ${{ steps.curseforge_forge.outputs.curseforge-url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-jars
+          path: artifacts
+
+      - id: curseforge_fabric
+        name: Publish Fabric build to CurseForge
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Fabric)"
+          version: "${{ needs.build.outputs.version }}+fabric"
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: |
+            artifacts/catskinc-fabric_*.jar
+          loaders: |
+            fabric
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
+          dependencies: |
+            architectury-api(required){curseforge:419699}
+            simple-voice-chat(optional){curseforge:416089}
+            plasmo-voice(optional){curseforge:467028}
+
+      - id: curseforge_forge
+        name: Publish Forge build to CurseForge
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          name: "CatSkinC ${{ needs.build.outputs.version }} (Forge)"
+          version: "${{ needs.build.outputs.version }}+forge"
+          changelog: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: |
+            artifacts/catskinc-forge_*.jar
+          loaders: |
+            forge
+          game-versions: |
+            ${{ needs.build.outputs.mc_version }}
+          dependencies: |
+            architectury-api(required){curseforge:419699}
+            simple-voice-chat(optional){curseforge:416089}
+            plasmo-voice(optional){curseforge:467028}
+
+  notify:
+    needs: [build, publish-modrinth, publish-curseforge]
+    # Run whenever the user asked for notifications, even if one of the
+    # publish jobs was skipped (because its input flag was false) — only
+    # bail out if a publish job that DID run actually failed.
+    if: >
+      ${{
+        always() &&
+        inputs.notify &&
+        (needs.publish-modrinth.result == 'success' || needs.publish-modrinth.result == 'skipped') &&
+        (needs.publish-curseforge.result == 'success' || needs.publish-curseforge.result == 'skipped')
+      }}
+    runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-jars
+          path: artifacts
+
+      - name: Discord Notification
+        if: ${{ env.DISCORD_WEBHOOK != '' }}
+        run: |
+          curl -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "CatSkinC ${{ needs.build.outputs.version }} ปล่อยแล้ว! 🚀",
+                "description": "เผยแพร่ไปยัง Modrinth และ CurseForge สำหรับ Minecraft ${{ needs.build.outputs.mc_version }} เรียบร้อย",
+                "color": 5814783,
+                "fields": [
+                  {"name": "เวอร์ชันมอด", "value": "${{ needs.build.outputs.version }}", "inline": true},
+                  {"name": "เวอร์ชัน Minecraft", "value": "${{ needs.build.outputs.mc_version }}", "inline": true},
+                  {"name": "Modrinth (Fabric)", "value": "${{ needs['publish-modrinth'].outputs.fabric_url || 'ไม่ได้เผยแพร่' }}", "inline": false},
+                  {"name": "Modrinth (Forge)", "value": "${{ needs['publish-modrinth'].outputs.forge_url || 'ไม่ได้เผยแพร่' }}", "inline": false},
+                  {"name": "CurseForge (Fabric)", "value": "${{ needs['publish-curseforge'].outputs.fabric_url || 'ไม่ได้เผยแพร่' }}", "inline": false},
+                  {"name": "CurseForge (Forge)", "value": "${{ needs['publish-curseforge'].outputs.forge_url || 'ไม่ได้เผยแพร่' }}", "inline": false}
+                ]
+              }]
+            }'
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.build.outputs.version }}-1.20.1
+          name: CatSkinC 1.20.1 v${{ needs.build.outputs.version }}
+          body: ${{ needs['extract-changelog'].outputs.changelog }}
+          files: artifacts/catskinc-*.jar
+          draft: false
+          prerelease: false

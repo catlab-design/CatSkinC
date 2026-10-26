@@ -296,7 +296,7 @@ extends Screen {
 
     public void resize(MinecraftClient minecraftClient, int n, int n2) {
         super.resize(minecraftClient, n, n2);
-        this.init();
+        // Layout will be recalculated in next render frame
     }
 
     public void close() {
@@ -309,6 +309,7 @@ extends Screen {
         this.lastMouseX = n;
         this.lastMouseY = n2;
         this.drawBackdrop(drawContext);
+        GuiBackdrop.drawVignette(drawContext, this.width, this.height);
         float f2 = 1.0F;
         this.renderTabs(drawContext, n, n2, true);
         int titleY = 10;
@@ -346,7 +347,7 @@ extends Screen {
         drawContext.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)this.ellipsis("Live Preview", this.centerW - 20)), this.centerX + 10, this.centerY + 9, -1381654);
         drawContext.drawTextWithShadow(this.textRenderer, (Text)Text.literal((String)this.ellipsis("Controls", this.rightW - 20)), this.rightX + 10, this.rightY + 9, -1381654);
         // Render branding links in top‑right corner
-        this.renderBrandingLinks(drawContext, n, n2, f);
+        this.renderBrandingLinks(drawContext, n, n2, f, titleY, subtitleY);
         this.renderPreviewArea(drawContext, n, n2);
         this.renderInfoBar(drawContext);
         this.renderSkinSlots(drawContext, n, n2);
@@ -405,28 +406,33 @@ extends Screen {
                 MinecraftClient.getInstance().setScreen(new SettingsScreen());
                 return true;
             }
-            // Branding links in top‑right corner
+            // Branding links in top‑right corner (right-aligned hit detection)
             final int HUD_X = this.width - 140;
-            final int HUD_Y = 15;
+            final int titleY = this.leftY < 40 ? 8 : 10;
+            final int HUD_Y = titleY;
             final int HUD_W = 130;
             final int HUD_H = 18;
             float titleScale = 0.8f;
-            int scaledBrandX = Math.round((float)HUD_X / titleScale);
+
+            // Title line hit box (right-aligned)
+            int brandTextWidth = this.textRenderer.getWidth("Cat Lab_ 9Creations");
+            int brandRightX = Math.round((float)(HUD_X + HUD_W) / titleScale) - brandTextWidth;
             int scaledBrandY = Math.round((float)HUD_Y / titleScale);
-            int scaledBrandW = Math.round((float)HUD_W / titleScale);
             int scaledBrandH = Math.round((float)HUD_H / titleScale);
-            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), scaledBrandX, scaledBrandY, scaledBrandW, scaledBrandH)) {
+            if (this.isInside(Math.round(n2 / titleScale), Math.round(n3 / titleScale), brandRightX, scaledBrandY, brandTextWidth, scaledBrandH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://catlabdesign.space");
                 return true;
             }
+
+            // YouTube line hit box (right-aligned)
             float descScale = 0.7f;
-            int youtubeY = HUD_Y + 20;
-            int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+            int youtubeY = scaledBrandY + Math.round(20.0f / titleScale);
+            int youtubeTextWidth = this.textRenderer.getWidth("Follow us on YouTube");
+            int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
             int scaledYoutubeY = Math.round((float)youtubeY / descScale);
-            int scaledYoutubeW = Math.round((float)HUD_W / descScale);
             int scaledYoutubeH = Math.round((float)HUD_H / descScale);
-            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH)) {
+            if (this.isInside(Math.round(n2 / descScale), Math.round(n3 / descScale), youtubeRightX, scaledYoutubeY, youtubeTextWidth, scaledYoutubeH)) {
                 ModSounds.playClick();
                 this.runBrowserAction("https://youtube.com/@CL9CC");
                 return true;
@@ -937,6 +943,9 @@ extends Screen {
             this.selectedFile = file2 = bl ? file : this.copyToHistory(file);
             this.selectedWidth = skinFileInfo.width;
             this.selectedHeight = skinFileInfo.height;
+            if (skinFileInfo.width > 4096) {
+                SkinUploadScreen.toastWarning("toast.warning.high_res_skin", new Object[0]);
+            }
             this.refreshPreviewTexture();
             ModLog.debug("Skin file selected: file='{}', size={}x{}, fromHistory={}", file2.getName(), skinFileInfo.width, skinFileInfo.height, bl);
             if (!bl) {
@@ -1447,6 +1456,7 @@ extends Screen {
         String text2 = "Settings";
         int textW2 = this.textRenderer.getWidth(text2);
         drawContext.drawTextWithShadow(this.textRenderer, Text.literal(text2), x2 + (tabW - textW2) / 2, tabY + (tabH - 8) / 2, -1);
+
     }
 
     private boolean isInside(int n, int n2, int n3, int n4, int n5, int n6) {
@@ -1487,15 +1497,15 @@ extends Screen {
         drawContext.getMatrices().pop();
     }
 
-    /** Renders the Cat Lab / YouTube branding links in the top‑right corner. */
-    private void renderBrandingLinks(DrawContext drawContext, int mouseX, int mouseY, float delta) {
+    /** Renders the Cat Lab / YouTube branding links in the top‑right corner (right‑aligned). */
+    private void renderBrandingLinks(DrawContext drawContext, int mouseX, int mouseY, float delta, int titleY, int subtitleY) {
         final int HUD_X = this.width - 140;
-        final int HUD_Y = 15;
+        final int HUD_Y = titleY;
         final int HUD_W = 130;
         final int HUD_H = 18;
 
         // Line 1: "Cat Lab_ 9Creations" → opens https://catlabdesign.space
-        // Use same scale as title (0.8f)
+        // Use same scale as title (0.8f) — right aligned to HUD_X + HUD_W
         float titleScale = 0.8f;
         int scaledHudX = Math.round((float)HUD_X / titleScale);
         int scaledHudY = Math.round((float)HUD_Y / titleScale);
@@ -1506,30 +1516,42 @@ extends Screen {
             Math.round((float)mouseY / titleScale),
             scaledHudX, scaledHudY, scaledW, scaledH);
         int brandColor = hoverBrand ? -1 : -1;
+
+        // Calculate right-aligned X for title line
+        int brandTextWidth = this.textRenderer.getWidth("Cat Lab_ 9Creations");
+        int brandRightX = Math.round((float)(HUD_X + HUD_W) / titleScale) - brandTextWidth;
+
         drawContext.getMatrices().push();
         drawContext.getMatrices().scale(titleScale, titleScale, 1.0f);
         drawContext.drawTextWithShadow(this.textRenderer,
             Text.literal("Cat Lab_ 9Creations"),
-            scaledHudX, scaledHudY, brandColor);
+            brandRightX, scaledHudY, brandColor);
         drawContext.getMatrices().pop();
 
         // Line 2: "Follow us on YouTube" (YouTube in red) → opens https://youtube.com/@CL9CC
-        // Use same scale as subtitle (0.7f)
-        int youtubeY = HUD_Y + 20;
-        float descScale = 0.7f;
-        int scaledYoutubeX = Math.round((float)HUD_X / descScale);
-        int scaledYoutubeY = Math.round((float)youtubeY / descScale);
-        int scaledYoutubeW = Math.round((float)HUD_W / descScale);
-        int scaledYoutubeH = Math.round((float)HUD_H / descScale);
-        boolean hoverYouTube = this.isInside(
-            Math.round((float)mouseX / descScale),
-            Math.round((float)mouseY / descScale),
-            scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
-        MutableText youtubeText = Text.literal("Follow us on ").append(Text.literal("YouTube").formatted(net.minecraft.util.Formatting.RED));
-        drawContext.getMatrices().push();
-        drawContext.getMatrices().scale(descScale, descScale, 1.0f);
-        drawContext.drawTextWithShadow(this.textRenderer, youtubeText, scaledYoutubeX, scaledYoutubeY, -1);
-        drawContext.getMatrices().pop();
+        // Use same scale as subtitle (0.7f) — right aligned to HUD_X + HUD_W
+        // Align with subtitle row when subtitle is visible
+        if (subtitleY != -999) {
+            float descScale = 0.7f;
+            int youtubeY = subtitleY;
+            int scaledYoutubeX = Math.round((float)HUD_X / descScale);
+            int scaledYoutubeY = Math.round((float)youtubeY / descScale);
+            int scaledYoutubeW = Math.round((float)HUD_W / descScale);
+            int scaledYoutubeH = Math.round((float)HUD_H / descScale);
+            boolean hoverYouTube = this.isInside(
+                Math.round((float)mouseX / descScale),
+                Math.round((float)mouseY / descScale),
+                scaledYoutubeX, scaledYoutubeY, scaledYoutubeW, scaledYoutubeH);
+
+            MutableText youtubeText = Text.literal("Follow us on ").append(Text.literal("YouTube").formatted(net.minecraft.util.Formatting.RED));
+            int youtubeTextWidth = this.textRenderer.getWidth("Follow us on YouTube");
+            int youtubeRightX = Math.round((float)(HUD_X + HUD_W) / descScale) - youtubeTextWidth;
+
+            drawContext.getMatrices().push();
+            drawContext.getMatrices().scale(descScale, descScale, 1.0f);
+            drawContext.drawTextWithShadow(this.textRenderer, youtubeText, youtubeRightX, scaledYoutubeY, -1);
+            drawContext.getMatrices().pop();
+        }
     }
 
     /** Opens a URL in the system default browser. */
@@ -1632,12 +1654,12 @@ extends Screen {
     private static boolean isValidSize(int n, int n2) {
         boolean bl = n == n2;
         boolean bl2 = (n & n - 1) == 0;
-        boolean bl3 = n >= 64 && n <= 4096;
+        boolean bl3 = n >= 64 && n <= 8192;
         return bl && bl2 && bl3;
     }
 
     private static boolean isValidOverlaySize(int n, int n2) {
-        return n >= 8 && n2 >= 8 && n <= 4096 && n2 <= 4096;
+        return n >= 8 && n2 >= 8 && n <= 8192 && n2 <= 8192;
     }
 
     private static int scaled(int n, float f) {
@@ -1748,6 +1770,10 @@ extends Screen {
         Toasts.error((Text)Text.translatable((String)"title.skin_management"), (Text)Text.translatable((String)string, (Object[])objectArray));
     }
 
+    private static void toastWarning(String string, Object ... objectArray) {
+        Toasts.warning((Text)Text.translatable((String)"title.skin_management"), (Text)Text.translatable((String)string, (Object[])objectArray));
+    }
+
 
 
     private static enum ButtonStyle {
@@ -1782,4 +1808,3 @@ extends Screen {
         }
     }
 }
-

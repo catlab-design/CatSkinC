@@ -1,6 +1,11 @@
 {
-  "key.categories.catskinc": "catskinc",
-  "key.catskinc.open_ui": "Open Skin Manager",
+  "key.categories.catskinc": "CatSkinC",
+  "key.catskinc.open_ui": "Open Skin UI",
+  "key.catskinc.myopia_increase": "Increase Myopia Range",
+  "key.catskinc.myopia_decrease": "Decrease Myopia Range",
+
+  "toast.catskinc.myopia.title": "Myopia",
+  "toast.catskinc.myopia.distance": "Range: %s blocks",
 
   "title.skin_management": "Skin Manager",
   "title.skin_cloud": "Skin Cloud",
@@ -24,7 +29,7 @@
   "screen.catskinc.slim_model": "Slim Model",
   "screen.catskinc.drop_hint": "[Drop skin/open/close PNG here]",
   "screen.catskinc.info.no_skin": "No skin selected",
-  "screen.catskinc.info.constraints": "PNG, square, power-of-two (64-4096)",
+  "screen.catskinc.info.constraints": "PNG, square, power-of-two (64-8192)",
   "screen.catskinc.info.select_skin_required": "Select a skin file to enable upload",
   "screen.catskinc.info.mouth_none": "Mouth: none",
   "screen.catskinc.info.mouth_open_none": "Open: none",
@@ -71,6 +76,7 @@
   "toast.error.upload_requires_skin": "Select a skin before uploading",
   "toast.error.mouth_requires_skin": "Select the base skin before selecting mouth PNG",
   "toast.error.mouth_size_mismatch": "Mouth PNG size must match selected skin",
+  "toast.warning.high_res_skin": "High-res skin (>4096px) may cause performance issues on low-VRAM GPUs",
 
   "config.catskinc.title": "CatSkinC Settings",
   "config.catskinc.category.general": "General",
@@ -89,4 +95,3 @@
   "config.catskinc.path_events": "Events path",
   "config.catskinc.timeout_ms": "Network timeout (ms)"
 }
-

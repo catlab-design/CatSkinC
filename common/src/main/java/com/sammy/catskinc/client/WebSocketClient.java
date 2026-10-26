@@ -80,7 +80,7 @@ public final class WebSocketClient {
     }
 
     public static class Builder {
-        private String baseUrl = "https://storage-api.catskin.space";
+        private String baseUrl = "https://storage-skin.catlabdesign.space";
         private String requestSigningKey = "";
         private int timeoutMs = DEFAULT_TIMEOUT_SECONDS * 1000;
         private Listener listener = new Listener() {};
@@ -279,10 +279,9 @@ public final class WebSocketClient {
                     listener.onToast(toastType, uuid, title);
                 }
                 case "ping" -> {
-                    // Server heartbeat ping - respond with pong
-                    JsonObject pongMsg = new JsonObject();
-                    pongMsg.addProperty("type", "pong");
-                    sendMessage(ws, pongMsg.toString());
+                    // Server heartbeat ping - acknowledge internally, don't send pong
+                    // Server only accepts auth, subscribe, ping from clients
+                    ModLog.trace("WS ping received from server");
                 }
                 case "pong" -> {
                     // Heartbeat response from server (if server sends pong)

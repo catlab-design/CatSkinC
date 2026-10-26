@@ -22,6 +22,8 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -100,7 +102,7 @@ public final class ServerApiClient {
     private static final ProgressListener NO_OP_PROGRESS = new ProgressListener() {
     };
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
-    private static final String DEFAULT_BASE_URL = "https://storage-api.catskin.space";
+    private static final String DEFAULT_BASE_URL = "https://storage-skin.catlabdesign.space";
     private static final String DEFAULT_PATH_UPLOAD = "/upload";
     private static final String DEFAULT_PATH_SELECT = "/select";
     private static final String DEFAULT_PATH_SELECTED = "/selected";
@@ -110,7 +112,15 @@ public final class ServerApiClient {
     private static final long DEFAULT_SELECTED_CACHE_TTL_MS = 1_500L;
     private static final long DEFAULT_PING_CACHE_TTL_MS = 10_000L;
     private static final int DEFAULT_MAX_JSON_BYTES = 256 * 1024;
-    private static final int DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+    private static final int DEFAULT_MAX_IMAGE_BYTES = 256 * 1024 * 1024; // 256 MB for high-res skins (4096x+)
+
+    // Headers that may contain sensitive data and should not be logged
+    private static final Set<String> SENSITIVE_HEADERS = Set.of(
+            "authorization", "set-cookie", "cookie", "x-csrf-token", "x-api-key",
+            "proxy-authorization", "www-authenticate", "x-amz-security-token",
+            "x-catskinc-signature", "x-catskinc-timestamp", "x-catskinc-nonce",
+            "x-catskinc-content-sha256", "x-catskinc-request-id"
+    );
     private static final boolean DEFAULT_ALLOW_INSECURE_HTTP = false;
     private static final String DEFAULT_REQUEST_SIGNING_KEY = "";
     private static final String DEFAULT_TLS_PIN_SHA256 = "";
@@ -174,6 +184,7 @@ public final class ServerApiClient {
     private static volatile boolean wsStop;
 
     private static final ConcurrentHashMap<UUID, CachedSelected> SELECTED_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, Long> SELECTED_CACHE_EPOCH = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, CompletableFuture<SelectedSkin>> SELECTED_IN_FLIGHT = new ConcurrentHashMap<>();
     private static volatile CachedPing cachedPing;
 
@@ -240,7 +251,9 @@ public final class ServerApiClient {
     }
 
     private static RuntimeConfig runtimeConfig() {
-        String baseUrl = ModConfig.get().getCatskinCloudIp();
+        String baseUrl = ModConfig.get().isDebugTestServerEnabled() && CatskincClient.isDebugPreviewEnabled()
+                ? "https://storage-skintest.catlabdesign.space"
+                : ModConfig.get().getCatskinCloudIp();
         if (baseUrl == null || baseUrl.isBlank()) {
             baseUrl = DEFAULT_BASE_URL;
         } else {
@@ -696,6 +709,7 @@ public final class ServerApiClient {
         }
 
         RuntimeConfig cfg = runtimeConfig();
+        long cacheEpoch = SELECTED_CACHE_EPOCH.computeIfAbsent(playerUuid, ignored -> 0L);
 
         CachedSelected cached = SELECTED_CACHE.get(playerUuid);
         if (cached != null && (now - cached.cachedAtMs) <= cfg.selectedCacheTtlMs) {
@@ -754,7 +768,13 @@ public final class ServerApiClient {
                         jsonString(body, "mouthCloseUrl"));
                 boolean slim = jsonBoolean(body, "slim", false);
                 SelectedSkin selectedSkin = new SelectedSkin(url, mouthOpenUrl, mouthCloseUrl, slim);
-                SELECTED_CACHE.put(playerUuid, new CachedSelected(selectedSkin, System.currentTimeMillis()));
+                SELECTED_CACHE_EPOCH.compute(playerUuid, (ignored, currentEpoch) -> {
+                    if (currentEpoch != null && currentEpoch == cacheEpoch) {
+                        SELECTED_CACHE.put(playerUuid,
+                                new CachedSelected(selectedSkin, System.currentTimeMillis()));
+                    }
+                    return currentEpoch;
+                });
                 ModLog.trace("Fetch selected ok: uuid={}, slim={}, url={}, mouthOpen={}, mouthClose={}",
                         playerUuid, slim, url, mouthOpenUrl, mouthCloseUrl);
                 return selectedSkin;
@@ -772,9 +792,12 @@ public final class ServerApiClient {
             } finally {
                 disconnectQuietly(connection);
             }
-        }, EXECUTOR).whenComplete((ignored, throwable) -> SELECTED_IN_FLIGHT.remove(playerUuid));
+        }, EXECUTOR);
 
         CompletableFuture<SelectedSkin> existing = SELECTED_IN_FLIGHT.putIfAbsent(playerUuid, created);
+        if (existing == null) {
+            created.whenComplete((ignored, throwable) -> SELECTED_IN_FLIGHT.remove(playerUuid, created));
+        }
         return existing != null ? existing : created;
     }
 
@@ -786,6 +809,12 @@ public final class ServerApiClient {
                 String requestId = newRequestId();
                 ModLog.trace("Downloading texture from {}", urlOrPath);
                 String downloadUrl = signDownloadUrl(urlOrPath, cfg);
+                String safeUrl = downloadUrl;
+                try {
+                    URI uri = new URI(downloadUrl);
+                    safeUrl = new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), null, null).toString();
+                } catch (URISyntaxException ignored) {}
+                ModLog.debug("Texture download request: url={}, signed={}", safeUrl, !downloadUrl.equals(urlOrPath));
                 connection = open("GET", downloadUrl, null, SHA256_EMPTY_HEX, requestId, false);
                 int code = responseCode(connection, requestId);
                 if (code == 426) {
@@ -793,7 +822,22 @@ public final class ServerApiClient {
                     return null;
                 }
                 if (code / 100 != 2) {
-                    ModLog.warn("Texture download failed: code={}, url={}", code, urlOrPath);
+                    ModLog.warn("Texture download failed: code={}, url={}, signedUrl={}", code, urlOrPath, safeUrl);
+                    // Log response headers with sensitive headers redacted
+                    for (String key : connection.getHeaderFields().keySet()) {
+                        if (key != null) {
+                            String lowerKey = key.toLowerCase(Locale.ROOT);
+                            boolean isSensitive = SENSITIVE_HEADERS.contains(lowerKey) ||
+                                    lowerKey.contains("token") || lowerKey.contains("secret") ||
+                                    lowerKey.contains("key") || lowerKey.contains("auth") ||
+                                    lowerKey.contains("credential");
+                            if (!isSensitive) {
+                                ModLog.trace("  Header: {} = {}", key, connection.getHeaderFields().get(key));
+                            } else {
+                                ModLog.trace("  Header: {} = [REDACTED]", key);
+                            }
+                        }
+                    }
                     return null;
                 }
                 byte[] bodyBytes;
@@ -1256,11 +1300,14 @@ public final class ServerApiClient {
         return future;
     }
 
-    private static void invalidateSelectedCache(UUID uuid) {
+    static void invalidateSelectedCache(UUID uuid) {
         if (uuid == null) {
             return;
         }
-        SELECTED_CACHE.remove(uuid);
+        SELECTED_CACHE_EPOCH.compute(uuid, (ignored, epoch) -> {
+            SELECTED_CACHE.remove(uuid);
+            return epoch == null ? 1L : epoch + 1L;
+        });
         SELECTED_IN_FLIGHT.remove(uuid);
         PENDING_SELECTIONS.remove(uuid);
     }
@@ -1699,6 +1746,7 @@ public final class ServerApiClient {
     static void resetForTesting() {
         authToken = null;
         SELECTED_CACHE.clear();
+        SELECTED_CACHE_EPOCH.clear();
         SELECTED_IN_FLIGHT.clear();
         cachedPing = null;
         consecutiveFailures.set(0);
@@ -1923,7 +1971,7 @@ public final class ServerApiClient {
         }
         byte[] bytes = Files.readAllBytes(file.toPath());
         if (bytes.length > maxBytes) {
-            throw new IOException(label + " file is too large");
+            throw new IOException(label + " file is too large (max " + (maxBytes / 1024 / 1024) + " MB)");
         }
         return bytes;
     }
@@ -2171,4 +2219,3 @@ public final class ServerApiClient {
     private record CachedPing(boolean ok, long cachedAtMs) {
     }
 }
-

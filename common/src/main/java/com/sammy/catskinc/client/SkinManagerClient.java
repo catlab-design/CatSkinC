@@ -7,21 +7,26 @@ import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.util.Identifier;
 
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public final class SkinManagerClient {
     private static final Map<UUID, NativeImage> SKIN_IMAGES = new ConcurrentHashMap<>();
     private static final Map<UUID, NativeImage> TALKING_IMAGES = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> SLIM = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> PREFERRED_SLIM = new ConcurrentHashMap<>();
-    private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
+    private static final FetchCoordinator<UUID> FETCH_COORDINATOR = new FetchCoordinator<>();
     private static final Map<UUID, Long> LAST_CHECK = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_SKIN_URL = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LAST_MOUTH_OPEN_URL = new ConcurrentHashMap<>();
@@ -32,12 +37,19 @@ public final class SkinManagerClient {
 
     private static final Map<UUID, NativeImageBackedTexture> SHARED_DYNAMIC_TEXTURE = new ConcurrentHashMap<>();
 
+    // Content-hash based injection cache (replaces object-reference LAST_INJECTED_IMAGE)
+    private static final ConcurrentMap<UUID, String> INJECTED_IMAGE_HASH = new ConcurrentHashMap<>();
+
     private static volatile long refreshIntervalMs = 5_000L;
     private static final long FAST_RETRY_MS = 2_000L;
     private static final Map<UUID, Long> FAST_RETRY_SCHEDULED = new ConcurrentHashMap<>();
 
-    private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r, "CatSkinC-SkinManager");
+    // Separate executors: download pool (parallel) vs render prep pool (single-threaded)
+    private static final ExecutorService DOWNLOAD_EXECUTOR = new ThreadPoolExecutor(
+            4, 8, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
+            r -> { Thread t = new Thread(r, "CatSkinC-Download"); t.setDaemon(true); return t; });
+    private static final ExecutorService RENDER_PREP_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "CatSkinC-RenderPrep");
         thread.setDaemon(true);
         return thread;
     });
@@ -50,6 +62,8 @@ public final class SkinManagerClient {
             return;
         }
         VANILLA_TEXTURES.putIfAbsent(uuid, vanillaId);
+        // Process any pending managed injection for this UUID
+        SkinOverrideStore.processPendingInjection(uuid, vanillaId);
     }
 
     static Identifier getVanillaIdentifier(UUID uuid) {
@@ -72,7 +86,7 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return null;
         }
-        Identifier rendered = resolveRenderTexture(uuid);
+        Identifier rendered = resolveRenderTexture(uuid, MyopiaLod.Level.L0);
         if (rendered == null) {
             Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
             long now = System.currentTimeMillis();
@@ -90,7 +104,43 @@ public final class SkinManagerClient {
     }
 
     public static Identifier getCached(UUID uuid) {
-        return uuid == null ? null : resolveRenderTexture(uuid);
+        return uuid == null ? null : resolveRenderTexture(uuid, MyopiaLod.Level.L0);
+    }
+
+    /**
+     * Like {@link #getCached(UUID)} but returns a reduced-resolution variant for the
+     * given Myopia LOD level. {@code L0} (or {@code null}) yields the full-resolution texture.
+     */
+    public static Identifier getCached(UUID uuid, MyopiaLod.Level level) {
+        return uuid == null ? null : resolveRenderTexture(uuid, level == null ? MyopiaLod.Level.L0 : level);
+    }
+
+    /** True when this player has a CatSkinC-managed skin image loaded (i.e. eligible for Myopia LOD). */
+    public static boolean hasManagedSkin(UUID uuid) {
+        return uuid != null && SKIN_IMAGES.containsKey(uuid);
+    }
+
+    /** Installs a small synthetic skin for the development Myopia preview player. */
+    static void installDebugSkin(UUID uuid) {
+        if (uuid == null) return;
+        NativeImage image = new NativeImage(64, 64, true);
+        for (int y = 0; y < 64; y++) {
+            for (int x = 0; x < 64; x++) {
+                boolean stripe = ((x / 8) + (y / 8)) % 2 == 0;
+                image.setColor(x, y, stripe ? 0xFFFF4D9D : 0xFF293B9F);
+            }
+        }
+        NativeImage previous = SKIN_IMAGES.put(uuid, image);
+        closeQuietly(previous);
+        SLIM.put(uuid, false);
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client != null) {
+            Identifier id = Identifiers.mod("debug/" + uuid);
+            client.getTextureManager().registerTexture(id, new NativeImageBackedTexture(copyImage(image)));
+            VANILLA_TEXTURES.put(uuid, id);
+            FALLBACK_TEXTURES.add(uuid);
+        }
+        MyopiaTextureCache.invalidate(uuid);
     }
 
     public static void ensureFetch(UUID uuid) {
@@ -128,24 +178,22 @@ public final class SkinManagerClient {
             return;
         }
         LAST_CHECK.remove(uuid);
-        if (!SKIN_IMAGES.containsKey(uuid)) {
-            Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
-            long now = System.currentTimeMillis();
-            if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
-                FAST_RETRY_SCHEDULED.put(uuid, now);
-                fetchAndApplyFor(uuid);
-            }
-        } else {
-            fetchAndApplyFor(uuid);
+        FAST_RETRY_SCHEDULED.remove(uuid);
+        ServerApiClient.invalidateSelectedCache(uuid);
+        if (!FETCH_COORDINATOR.force(uuid)) {
+            return;
         }
+        fetchAndApplyForStarted(uuid);
     }
 
     public static void refresh(UUID uuid) {
         if (uuid == null) {
             return;
         }
-        restorePixels(uuid);
-        destroyTextures(MinecraftClient.getInstance(), uuid);
+        if (!SkinOverrideStore.isManaged(uuid)) {
+            restorePixels(uuid);
+            destroyTextures(MinecraftClient.getInstance(), uuid);
+        }
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
         if (!SKIN_IMAGES.containsKey(uuid)) {
@@ -161,12 +209,16 @@ public final class SkinManagerClient {
     }
 
     public static void fetchAndApplyFor(UUID uuid) {
-        if (uuid == null || !IN_FLIGHT.add(uuid)) {
+        if (uuid == null || !FETCH_COORDINATOR.tryStart(uuid)) {
             if (uuid != null) {
                 ModLog.trace("Fetch skipped (already in flight): {}", uuid);
             }
             return;
         }
+        fetchAndApplyForStarted(uuid);
+    }
+
+    private static void fetchAndApplyForStarted(UUID uuid) {
         ModLog.trace("Fetch queued for {}", uuid);
 
         CompletableFuture<ServerApiClient.SelectedSkin> selected = ServerApiClient.fetchSelectedAsync(uuid);
@@ -205,13 +257,14 @@ public final class SkinManagerClient {
                             mouthOpenImage,
                             mouthOpenRequested));
         }).whenCompleteAsync((images, throwable) -> {
-            IN_FLIGHT.remove(uuid);
             if (throwable != null) {
                 ModLog.error("Skin apply failed for uuid=" + uuid, throwable);
+                finishFetch(uuid);
                 return;
             }
             if (images == null) {
                 ModLog.trace("No texture update for {}", uuid);
+                finishFetch(uuid);
                 return;
             }
             LAST_CHECK.put(uuid, System.currentTimeMillis());
@@ -221,9 +274,11 @@ public final class SkinManagerClient {
                 ModLog.trace("Client not ready; dropping texture update for {}", uuid);
                 closeQuietly(images.skinImage);
                 closeQuietly(images.mouthOpenImage);
+                finishFetch(uuid);
                 return;
             }
-            client.execute(() -> {
+            RENDER_PREP_EXECUTOR.execute(() -> {
+                try {
                 if (images.skinImage == null) {
                     ModLog.warn("Skin image download returned null for {}", uuid);
                     LAST_SKIN_URL.remove(uuid);
@@ -231,13 +286,25 @@ public final class SkinManagerClient {
                     return;
                 }
 
-                NativeImage talkingImage = createOverlayImage(uuid, images.skinImage, images.mouthOpenImage,
+                // Enforce maxSkinResolution config - downscale if needed
+                int maxRes = ModConfig.get().getMaxSkinResolution();
+                NativeImage skinImage = images.skinImage;
+                if (skinImage.getWidth() > maxRes || skinImage.getHeight() > maxRes) {
+                    ModLog.debug("Downscaling skin for {} from {}x{} to {}x{}",
+                            uuid, skinImage.getWidth(), skinImage.getHeight(), maxRes, maxRes);
+                    NativeImage downscaled = new NativeImage(maxRes, maxRes, true);
+                    blitPixels(downscaled, skinImage);
+                    skinImage.close();
+                    skinImage = downscaled;
+                }
+
+                NativeImage talkingImage = createOverlayImage(uuid, skinImage, images.mouthOpenImage,
                         "mouth-open");
                 if (images.mouthOpenRequested && talkingImage == null) {
                     ModLog.warn("Mouth-open texture missing after download for {}", uuid);
                 }
 
-                NativeImage previousSkin = SKIN_IMAGES.put(uuid, images.skinImage);
+                NativeImage previousSkin = SKIN_IMAGES.put(uuid, skinImage);
                 closeQuietly(previousSkin);
                 if (talkingImage != null) {
                     NativeImage previousTalking = TALKING_IMAGES.put(uuid, talkingImage);
@@ -252,8 +319,19 @@ public final class SkinManagerClient {
                 }
 
                 ModLog.trace("Texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
+                } finally {
+                    finishFetch(uuid);
+                }
             });
-        }, EXECUTOR);
+        }, DOWNLOAD_EXECUTOR);
+    }
+
+    private static void finishFetch(UUID uuid) {
+        if (FETCH_COORDINATOR.finish(uuid)) {
+            LAST_CHECK.remove(uuid);
+            ServerApiClient.invalidateSelectedCache(uuid);
+            fetchAndApplyForStarted(uuid);
+        }
     }
 
     public static Boolean isSlimOrNull(UUID uuid) {
@@ -290,8 +368,9 @@ public final class SkinManagerClient {
         LAST_CHECK.clear();
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
-        IN_FLIGHT.clear();
+        FETCH_COORDINATOR.clear();
         FAST_RETRY_SCHEDULED.clear();
+        INJECTED_IMAGE_HASH.clear();
         restoreAllPixels();
         MinecraftClient client = MinecraftClient.getInstance();
         if (client != null) {
@@ -305,11 +384,18 @@ public final class SkinManagerClient {
         FALLBACK_TEXTURES.clear();
         VANILLA_TEXTURES.clear();
         SHARED_DYNAMIC_TEXTURE.clear();
+        MyopiaTextureCache.clearAll();
+        MyopiaLodTracker.get().reset();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
 
     public static void injectPixels(UUID uuid, NativeImage source) {
         if (uuid == null || source == null) {
+            return;
+        }
+        // Skip if content hash matches (avoids re-injecting unchanged skin every frame)
+        String hash = computeImageHash(source);
+        if (hash.equals(INJECTED_IMAGE_HASH.get(uuid))) {
             return;
         }
         Identifier vanillaId = VANILLA_TEXTURES.get(uuid);
@@ -321,7 +407,14 @@ public final class SkinManagerClient {
             return;
         }
         AbstractTexture tex = client.getTextureManager().getTexture(vanillaId);
-        if (tex instanceof NativeImageBackedTexture nibTex) {
+        // Our own per-UUID texture is sized for the previous skin; if the new skin's size differs
+        // (e.g. 64x64 -> HD), recreate it below instead of squashing the new skin into it.
+        boolean ownedSizeMismatch = FALLBACK_TEXTURES.contains(uuid)
+                && tex instanceof NativeImageBackedTexture owned
+                && owned.getImage() != null
+                && (owned.getImage().getWidth() != source.getWidth()
+                        || owned.getImage().getHeight() != source.getHeight());
+        if (tex instanceof NativeImageBackedTexture nibTex && !ownedSizeMismatch) {
             NativeImage target = nibTex.getImage();
             if (target == null) {
                 return;
@@ -348,6 +441,25 @@ public final class SkinManagerClient {
             VANILLA_TEXTURES.put(uuid, fallbackId);
             FALLBACK_TEXTURES.add(uuid);
         }
+        INJECTED_IMAGE_HASH.put(uuid, hash);
+    }
+
+    /**
+     * Computes a fast content hash of a NativeImage for change detection.
+     * Uses first/last rows + dimensions for speed (good enough for skin change detection).
+     */
+    private static String computeImageHash(NativeImage image) {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        long hash = w * 31L + h;
+        // Sample first row, middle row, last row
+        int[] rows = {0, h / 2, h - 1};
+        for (int row : rows) {
+            for (int x = 0; x < w; x += Math.max(1, w / 16)) { // Sample 16 points per row
+                hash = hash * 31 + image.getColor(x, row);
+            }
+        }
+        return Long.toHexString(hash);
     }
 
     private static void restorePixels(UUID uuid) {
@@ -395,26 +507,44 @@ public final class SkinManagerClient {
         }
     }
 
-    private static void blitPixels(NativeImage target, NativeImage source) {
+    static void blitPixels(NativeImage target, NativeImage source) {
         int sw = source.getWidth();
         int sh = source.getHeight();
         int tw = target.getWidth();
         int th = target.getHeight();
-        int w = Math.min(sw, tw);
-        int h = Math.min(sh, th);
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                target.setColor(x, y, source.getColor(x, y));
+        if (sw == tw && sh == th) {
+            // Same dimensions - direct copy
+            for (int y = 0; y < th; y++) {
+                for (int x = 0; x < tw; x++) {
+                    target.setColor(x, y, source.getColor(x, y));
+                }
             }
+            return;
         }
-        for (int y = h; y < th; y++) {
+        // Pre-compute scale ratios to avoid division in inner loop
+        float xRatio = (float) sw / tw;
+        float yRatio = (float) sh / th;
+        int maxSx = sw - 1;
+        int maxSy = sh - 1;
+        if (sw < tw || sh < th) {
+            // Source is smaller - need to scale up to target dimensions
+            // Use nearest-neighbor sampling (pixel-perfect for power-of-2 upscale)
+            for (int y = 0; y < th; y++) {
+                int sy = Math.min(maxSy, (int) (y * yRatio));
+                for (int x = 0; x < tw; x++) {
+                    int sx = Math.min(maxSx, (int) (x * xRatio));
+                    target.setColor(x, y, source.getColor(sx, sy));
+                }
+            }
+            return;
+        }
+        // Source is larger - need to scale down to target dimensions
+        // Use nearest-neighbor sampling (pixel-perfect for power-of-2 downscale)
+        for (int y = 0; y < th; y++) {
+            int sy = Math.min(maxSy, (int) (y * yRatio));
             for (int x = 0; x < tw; x++) {
-                target.setColor(x, y, 0);
-            }
-        }
-        for (int y = 0; y < h; y++) {
-            for (int x = w; x < tw; x++) {
-                target.setColor(x, y, 0);
+                int sx = Math.min(maxSx, (int) (x * xRatio));
+                target.setColor(x, y, source.getColor(sx, sy));
             }
         }
     }
@@ -431,16 +561,25 @@ public final class SkinManagerClient {
         return copy;
     }
 
-    private static Identifier resolveRenderTexture(UUID uuid) {
+    private static Identifier resolveRenderTexture(UUID uuid, MyopiaLod.Level level) {
         NativeImage image = SKIN_IMAGES.get(uuid);
         if (image == null) {
             return null;
         }
+        String variant = MyopiaTextureCache.VARIANT_SKIN;
         if (VoiceActivityTracker.isSpeaking(uuid)) {
             NativeImage talking = TALKING_IMAGES.get(uuid);
             if (talking != null) {
                 image = talking;
+                variant = MyopiaTextureCache.VARIANT_TALKING;
             }
+        }
+        if (!level.isFull()) {
+            Identifier lod = MyopiaTextureCache.get(uuid, variant, level, image);
+            if (lod != null) {
+                return lod;
+            }
+            // Fall through to full resolution if the LOD texture could not be built.
         }
         injectPixels(uuid, image);
         return VANILLA_TEXTURES.get(uuid);
@@ -464,6 +603,8 @@ public final class SkinManagerClient {
         closeQuietly(skin);
         NativeImage talking = TALKING_IMAGES.remove(uuid);
         closeQuietly(talking);
+        MyopiaTextureCache.invalidate(uuid);
+        MyopiaLodTracker.get().forget(uuid);
         if (client != null && FALLBACK_TEXTURES.remove(uuid)) {
             Identifier fallbackId = VANILLA_TEXTURES.get(uuid);
             if (fallbackId != null) {
@@ -540,9 +681,10 @@ public final class SkinManagerClient {
         LAST_CHECK.clear();
         LAST_SKIN_URL.clear();
         LAST_MOUTH_OPEN_URL.clear();
-        IN_FLIGHT.clear();
+        FETCH_COORDINATOR.clear();
         refreshIntervalMs = 5_000L;
         FAST_RETRY_SCHEDULED.clear();
+        INJECTED_IMAGE_HASH.clear();
         for (NativeImage image : ORIGINAL_PIXELS.values()) {
             closeQuietly(image);
         }
@@ -550,6 +692,8 @@ public final class SkinManagerClient {
         FALLBACK_TEXTURES.clear();
         ORIGINAL_PIXELS.clear();
         SHARED_DYNAMIC_TEXTURE.clear();
+        MyopiaTextureCache.clearAll();
+        MyopiaLodTracker.get().reset();
     }
 
     private record DownloadedImages(

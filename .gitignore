@@ -60,3 +60,5 @@ fabric/src/main/resources/assets/
 tmp_decompile/
 
 report.txt
+
+.gradle-home/

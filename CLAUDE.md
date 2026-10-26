@@ -2,7 +2,7 @@
 
 Cloud-based skin upload, skin history, and live skin sync mod for Minecraft 1.20.1.
 
-- **Version:** 4.0.0
+- **Version:** 4.1.1
 - **License:** CC BY-NC-SA 4.0
 - **Authors:** Team CatLab Design (originally Q Team Studio)
 
@@ -160,13 +160,22 @@ ServerApiClient.startSse()
 
 ```json
 {
-  "catskinCloudIp": "storage-api.catskin.space",
+  "catskinCloudIp": "storage-skin.catlabdesign.space",
   "showConnectionToast": true,
   "showUploadToast": true,
   "showInfoToast": true,
-  "showErrorToast": true
+  "showErrorToast": true,
+  "myopiaEnabled": false,
+  "myopiaDistance": 20,
+  "myopiaMode": "NORMAL"
 }
 ```
+
+`myopiaDistance` is a base transition distance in blocks (4–128). In Normal
+mode, skins use full, half, quarter, then eighth resolution as distance crosses
+1×, 2×, and 4× that base. Panicked mode starts at half resolution and reaches
+eighth resolution at 2× the base distance. The world renderer alone uses these
+variants; all menus keep full-resolution skins.
 
 **Environment variable overrides:**
 - `CATSKINC_REQUEST_SIGNING_KEY` — shared HMAC key
@@ -179,12 +188,12 @@ ServerApiClient.startSse()
 - `-Dcatskinc.dev=true`
 
 **API endpoints (hardcoded defaults):**
-- `https://storage-api.catskin.space/upload` — skin upload
-- `https://storage-api.catskin.space/select` — skin selection
-- `https://storage-api.catskin.space/selected` — get selected
-- `https://storage-api.catskin.space/public/{id}/skin.png` — public asset
-- `https://storage-api.catskin.space/events` — SSE stream
-- `https://storage-api.catskin.space/version/check` — update check
+- `https://storage-skin.catlabdesign.space/upload` — skin upload
+- `https://storage-skin.catlabdesign.space/select` — skin selection
+- `https://storage-skin.catlabdesign.space/selected` — get selected
+- `https://storage-skin.catlabdesign.space/public/{id}/skin.png` — public asset
+- `https://storage-skin.catlabdesign.space/events` — SSE stream
+- `https://storage-skin.catlabdesign.space/version/check` — update check
 
 ---
 
