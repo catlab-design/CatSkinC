@@ -17,7 +17,15 @@ public final class PlayerSkinOverrideResolver {
      * from {@link SkinOverrideStore} are always returned at full resolution.
      */
     public static Identifier resolveTexture(UUID uuid, MyopiaLod.Level level) {
-        ResolvedOverride override = resolveOverride(uuid, level);
+        return resolveTexture(uuid, level, Double.NaN);
+    }
+
+    /**
+     * World-render variant: {@code distanceSq} is the squared distance to the local player
+     * (used by the AUTO texture quality to pick lossless skins for the nearest players).
+     */
+    public static Identifier resolveTexture(UUID uuid, MyopiaLod.Level level, double distanceSq) {
+        ResolvedOverride override = resolveOverride(uuid, level, distanceSq);
         return override == null ? null : override.texture();
     }
 
@@ -33,10 +41,10 @@ public final class PlayerSkinOverrideResolver {
     }
 
     private static ResolvedOverride resolveOverride(UUID uuid) {
-        return resolveOverride(uuid, MyopiaLod.Level.L0);
+        return resolveOverride(uuid, MyopiaLod.Level.L0, Double.NaN);
     }
 
-    private static ResolvedOverride resolveOverride(UUID uuid, MyopiaLod.Level level) {
+    private static ResolvedOverride resolveOverride(UUID uuid, MyopiaLod.Level level, double distanceSq) {
         if (uuid == null) {
             return null;
         }
@@ -46,7 +54,7 @@ public final class PlayerSkinOverrideResolver {
             return new ResolvedOverride(entry.texture, entry.slim);
         }
 
-        Identifier cached = SkinManagerClient.getCached(uuid, level);
+        Identifier cached = SkinManagerClient.getCached(uuid, level, distanceSq);
         if (cached != null) {
             return new ResolvedOverride(cached, SkinManagerClient.isSlimOrNull(uuid));
         }
