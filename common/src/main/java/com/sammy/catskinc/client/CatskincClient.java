@@ -27,6 +27,7 @@ public final class CatskincClient {
     private static KeyBinding myopiaIncreaseKey;
     private static KeyBinding myopiaDecreaseKey;
     private static int tickCounter;
+    private static int compressedSweepTicks;
     private static boolean initialized;
 
     private CatskincClient() {
@@ -89,6 +90,11 @@ public final class CatskincClient {
             }
             while (myopiaDecreaseKey.wasPressed()) {
                 adjustMyopiaDistance(-ModConfig.MYOPIA_DISTANCE_STEP);
+            }
+
+            if (++compressedSweepTicks >= 20) {
+                compressedSweepTicks = 0;
+                CompressedSkinCache.sweep();
             }
 
             if (client.world == null) {

@@ -22,6 +22,8 @@ public final class ModConfig {
     private boolean showErrorToast = true;
     private String requestSigningKey = null;
     private int maxSkinResolution = 8192; // Max allowed skin resolution (64-8192)
+    // How other players' HD skins are stored on the GPU. LOSSLESS keeps the original RGBA behaviour.
+    private TextureQuality textureQuality = TextureQuality.LOSSLESS;
 
     // Connection mode: AUTO (WS with SSE fallback), WEBSOCKET (force WS), SSE (force SSE)
     private ConnectionMode connectionMode = ConnectionMode.AUTO;
@@ -57,6 +59,36 @@ public final class ModConfig {
     public enum MyopiaMode {
         NORMAL,     // full / half / quarter / eighth resolution at 1x / 2x / 4x base distance
         PANICKED    // half / quarter / eighth resolution at 1x / 2x base distance
+    }
+
+    public enum TextureQuality {
+        LOSSLESS(null, 0),                   // RGBA8, resolution limited only by maxSkinResolution
+        HIGH(DxtEncoder.Format.BC3, 4096),   // DXT5, 4x less VRAM, capped at 4096px
+        BALANCED(DxtEncoder.Format.BC3, 2048), // DXT5, capped at 2048px
+        FASTEST(DxtEncoder.Format.BC1, 1024);  // DXT1, 8x less VRAM, 1-bit alpha, capped at 1024px
+
+        private final DxtEncoder.Format format;
+        private final int maxResolution;
+
+        TextureQuality(DxtEncoder.Format format, int maxResolution) {
+            this.format = format;
+            this.maxResolution = maxResolution;
+        }
+
+        /** Compression format, or null for uncompressed RGBA. */
+        public DxtEncoder.Format format() {
+            return format;
+        }
+
+        /** Resolution cap for this preset combined with the user's maxSkinResolution. */
+        public int effectiveMaxResolution(int userMax) {
+            return maxResolution == 0 ? userMax : Math.min(userMax, maxResolution);
+        }
+
+        public TextureQuality next() {
+            TextureQuality[] values = values();
+            return values[(ordinal() + 1) % values.length];
+        }
     }
 
     private static ModConfig instance = new ModConfig();
@@ -220,6 +252,14 @@ public final class ModConfig {
 
     public void setMaxSkinResolution(int maxSkinResolution) {
         this.maxSkinResolution = Math.max(64, Math.min(maxSkinResolution, 8192));
+    }
+
+    public TextureQuality getTextureQuality() {
+        return textureQuality == null ? TextureQuality.LOSSLESS : textureQuality;
+    }
+
+    public void setTextureQuality(TextureQuality textureQuality) {
+        this.textureQuality = textureQuality == null ? TextureQuality.LOSSLESS : textureQuality;
     }
 
     public boolean isMyopiaEnabled() {

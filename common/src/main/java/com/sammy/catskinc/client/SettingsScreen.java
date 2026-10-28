@@ -28,6 +28,7 @@ public final class SettingsScreen extends Screen {
     
     private boolean generalExpanded = true;
     private boolean myopiaExpanded = true;
+    private boolean performanceExpanded = true;
     private boolean keybindsExpanded = true;
     private boolean toastsExpanded = true;
     private boolean debugExpanded = true;
@@ -52,6 +53,7 @@ public final class SettingsScreen extends Screen {
         new SettingItem("myopiaEnabled", "Enabled", "Myopia"),
         new SettingItem("myopiaDistance", "Range", "Myopia"),
         new SettingItem("myopiaMode", "Mode", "Myopia"),
+        new SettingItem("textureQuality", "Skin Texture Quality", "Performance"),
         new SettingItem("openSkinMenuKey", "Open Skin Menu Key", "Keybinds"),
         new SettingItem("myopiaIncreaseKey", "Increase Range Key", "Keybinds"),
         new SettingItem("myopiaDecreaseKey", "Decrease Range Key", "Keybinds"),
@@ -312,6 +314,20 @@ public final class SettingsScreen extends Screen {
                         String mode = ModConfig.get().getMyopiaMode() == ModConfig.MyopiaMode.PANICKED
                                 ? "Panicked" : "Normal";
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100, 16, mode);
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+                    } else if (item.key.equals("textureQuality")) {
+                        drawContext.drawTextWithShadow(this.textRenderer, Text.literal(item.label), this.panelX + 25, y + 4, -1);
+                        // Live VRAM / RAM used by compressed skins
+                        int statsX = this.panelX + 140;
+                        int statsMaxW = (rightOffset - 150) - statsX;
+                        if (statsMaxW > 20 && ModConfig.get().getTextureQuality().format() != null) {
+                            String stats = "VRAM " + formatMegabytes(CompressedSkinCache.gpuBytes())
+                                    + " · RAM " + formatMegabytes(CompressedSkinCache.ramBytes());
+                            drawContext.drawTextWithShadow(this.textRenderer, Text.literal(ellipsis(stats, statsMaxW)),
+                                    statsX, y + 4, 0xFF9A9A9A);
+                        }
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100, 16,
+                                textureQualityLabel(ModConfig.get().getTextureQuality()));
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
                     } else if (isKeyBindingSetting(item.key)) {
                         KeyBinding keyBinding = keyBindingFor(item.key);
@@ -628,6 +644,19 @@ public final class SettingsScreen extends Screen {
                                 saveAndApply();
                                 return true;
                             }
+                        } else if (item.key.equals("textureQuality")) {
+                            int qualityX = rightOffset - 145;
+                            int resetX = rightOffset - 40;
+                            if (mouseX >= qualityX && mouseX < qualityX + 100 && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                setTextureQuality(config.getTextureQuality().next());
+                                return true;
+                            }
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                ModSounds.playClick();
+                                setTextureQuality(ModConfig.TextureQuality.LOSSLESS);
+                                return true;
+                            }
                         } else if (isKeyBindingSetting(item.key)) {
                             int keyX = rightOffset - 145;
                             int editX = rightOffset - 40;
@@ -742,6 +771,7 @@ public final class SettingsScreen extends Screen {
         return switch (category) {
             case "General" -> generalExpanded;
             case "Myopia" -> myopiaExpanded;
+            case "Performance" -> performanceExpanded;
             case "Keybinds" -> keybindsExpanded;
             case "Debug" -> debugExpanded;
             default -> toastsExpanded;
@@ -752,6 +782,7 @@ public final class SettingsScreen extends Screen {
         switch (category) {
             case "General" -> generalExpanded = !generalExpanded;
             case "Myopia" -> myopiaExpanded = !myopiaExpanded;
+            case "Performance" -> performanceExpanded = !performanceExpanded;
             case "Keybinds" -> keybindsExpanded = !keybindsExpanded;
             case "Debug" -> debugExpanded = !debugExpanded;
             case "Toasts" -> toastsExpanded = !toastsExpanded;
@@ -782,8 +813,8 @@ public final class SettingsScreen extends Screen {
 
     private String[] categories() {
         return CatskincClient.isDebugPreviewEnabled()
-                ? new String[]{"General", "Myopia", "Keybinds", "Toasts", "Debug"}
-                : new String[]{"General", "Myopia", "Keybinds", "Toasts"};
+                ? new String[]{"General", "Myopia", "Performance", "Keybinds", "Toasts", "Debug"}
+                : new String[]{"General", "Myopia", "Performance", "Keybinds", "Toasts"};
     }
 
     private void toggleSetting(String key) {
@@ -806,6 +837,30 @@ public final class SettingsScreen extends Screen {
             case "showErrorToast": config.setShowErrorToast(true); break;
             case "myopiaEnabled": config.setMyopiaEnabled(false); break;
         }
+    }
+
+    private void setTextureQuality(ModConfig.TextureQuality quality) {
+        ModConfig config = ModConfig.get();
+        if (config.getTextureQuality() == quality) {
+            return;
+        }
+        config.setTextureQuality(quality);
+        saveAndApply();
+        // Skins are re-downloaded and re-encoded with the new preset.
+        SkinManagerClient.clearAll();
+    }
+
+    private static String textureQualityLabel(ModConfig.TextureQuality quality) {
+        return switch (quality) {
+            case LOSSLESS -> "Lossless";
+            case HIGH -> "High (4K)";
+            case BALANCED -> "Balanced (2K)";
+            case FASTEST -> "Fastest (1K)";
+        };
+    }
+
+    private static String formatMegabytes(long bytes) {
+        return String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
     private void saveAndApply() {
