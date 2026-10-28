@@ -54,6 +54,7 @@ public final class SettingsScreen extends Screen {
         new SettingItem("myopiaDistance", "Range", "Myopia"),
         new SettingItem("myopiaMode", "Mode", "Myopia"),
         new SettingItem("textureQuality", "Skin Texture Quality", "Performance"),
+        new SettingItem("maxLosslessPlayers", "Lossless Nearby Players", "Performance"),
         new SettingItem("openSkinMenuKey", "Open Skin Menu Key", "Keybinds"),
         new SettingItem("myopiaIncreaseKey", "Increase Range Key", "Keybinds"),
         new SettingItem("myopiaDecreaseKey", "Decrease Range Key", "Keybinds"),
@@ -323,11 +324,19 @@ public final class SettingsScreen extends Screen {
                         if (statsMaxW > 20 && ModConfig.get().getTextureQuality().format() != null) {
                             String stats = "VRAM " + formatMegabytes(CompressedSkinCache.gpuBytes())
                                     + " · RAM " + formatMegabytes(CompressedSkinCache.ramBytes());
+                            if (ModConfig.get().getTextureQuality().losslessWhenNear()) {
+                                stats += " · " + CompressedSkinCache.losslessPlayers() + " lossless";
+                            }
                             drawContext.drawTextWithShadow(this.textRenderer, Text.literal(ellipsis(stats, statsMaxW)),
                                     statsX, y + 4, 0xFF9A9A9A);
                         }
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100, 16,
                                 textureQualityLabel(ModConfig.get().getTextureQuality()));
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
+                    } else if (item.key.equals("maxLosslessPlayers")) {
+                        drawContext.drawTextWithShadow(this.textRenderer, Text.literal(item.label), this.panelX + 25, y + 4, -1);
+                        String count = "< " + ModConfig.get().getMaxLosslessPlayers() + " players >";
+                        drawRowButton(drawContext, mouseX, mouseY, rightOffset - 145, y, 100, 16, count);
                         drawRowButton(drawContext, mouseX, mouseY, rightOffset - 40, y, 40, 16, "Reset");
                     } else if (isKeyBindingSetting(item.key)) {
                         KeyBinding keyBinding = keyBindingFor(item.key);
@@ -657,6 +666,22 @@ public final class SettingsScreen extends Screen {
                                 setTextureQuality(ModConfig.TextureQuality.LOSSLESS);
                                 return true;
                             }
+                        } else if (item.key.equals("maxLosslessPlayers")) {
+                            int countX = rightOffset - 145;
+                            int resetX = rightOffset - 40;
+                            if (mouseX >= countX && mouseX < countX + 100 && mouseY >= y && mouseY < y + 16) {
+                                int delta = mouseX < countX + 50 ? -1 : 1;
+                                config.setMaxLosslessPlayers(config.getMaxLosslessPlayers() + delta);
+                                ModSounds.playClick();
+                                saveAndApply();
+                                return true;
+                            }
+                            if (mouseX >= resetX && mouseX < resetX + 40 && mouseY >= y && mouseY < y + 16) {
+                                config.setMaxLosslessPlayers(ModConfig.MAX_LOSSLESS_PLAYERS_DEFAULT);
+                                ModSounds.playClick();
+                                saveAndApply();
+                                return true;
+                            }
                         } else if (isKeyBindingSetting(item.key)) {
                             int keyX = rightOffset - 145;
                             int editX = rightOffset - 40;
@@ -853,6 +878,7 @@ public final class SettingsScreen extends Screen {
     private static String textureQualityLabel(ModConfig.TextureQuality quality) {
         return switch (quality) {
             case LOSSLESS -> "Lossless";
+            case AUTO -> "Auto";
             case HIGH -> "High (4K)";
             case BALANCED -> "Balanced (2K)";
             case FASTEST -> "Fastest (1K)";
@@ -873,6 +899,9 @@ public final class SettingsScreen extends Screen {
     private static boolean isSettingVisible(SettingItem item) {
         if (item.key.equals("catskinCloudIp")) {
             return ModConfig.get().getServerMode() == ModConfig.ServerMode.CUSTOM;
+        }
+        if (item.key.equals("maxLosslessPlayers")) {
+            return ModConfig.get().getTextureQuality().losslessWhenNear();
         }
         return true;
     }

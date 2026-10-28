@@ -24,6 +24,8 @@ public final class ModConfig {
     private int maxSkinResolution = 8192; // Max allowed skin resolution (64-8192)
     // How other players' HD skins are stored on the GPU. LOSSLESS keeps the original RGBA behaviour.
     private TextureQuality textureQuality = TextureQuality.LOSSLESS;
+    // AUTO only: how many of the nearest players may use the lossless original at once.
+    private int maxLosslessPlayers = MAX_LOSSLESS_PLAYERS_DEFAULT;
 
     // Connection mode: AUTO (WS with SSE fallback), WEBSOCKET (force WS), SSE (force SSE)
     private ConnectionMode connectionMode = ConnectionMode.AUTO;
@@ -39,6 +41,10 @@ public final class ModConfig {
     public static final int MYOPIA_DISTANCE_MAX = 128;
     public static final int MYOPIA_DISTANCE_DEFAULT = 20;
     public static final int MYOPIA_DISTANCE_STEP = 5;
+
+    public static final int MAX_LOSSLESS_PLAYERS_MIN = 1;
+    public static final int MAX_LOSSLESS_PLAYERS_MAX = 16;
+    public static final int MAX_LOSSLESS_PLAYERS_DEFAULT = 4;
 
     public enum ServerMode {
         GLOBAL,     // Host published in servers.json (falls back to GlobalServerResolver.FALLBACK_HOST)
@@ -62,8 +68,9 @@ public final class ModConfig {
     }
 
     public enum TextureQuality {
-        LOSSLESS(null, 0),                   // RGBA8, resolution limited only by maxSkinResolution
-        HIGH(DxtEncoder.Format.BC3, 4096),   // DXT5, 4x less VRAM, capped at 4096px
+        LOSSLESS(null, 0),                     // RGBA8, resolution limited only by maxSkinResolution
+        AUTO(DxtEncoder.Format.BC3, 2048),     // lossless when near, then DXT5 / DXT5 / DXT1 by Myopia level
+        HIGH(DxtEncoder.Format.BC3, 4096),     // DXT5, 4x less VRAM, capped at 4096px
         BALANCED(DxtEncoder.Format.BC3, 2048), // DXT5, capped at 2048px
         FASTEST(DxtEncoder.Format.BC1, 1024);  // DXT1, 8x less VRAM, 1-bit alpha, capped at 1024px
 
@@ -80,7 +87,20 @@ public final class ModConfig {
             return format;
         }
 
-        /** Resolution cap for this preset combined with the user's maxSkinResolution. */
+        /** Format used for one Myopia level. AUTO drops to DXT1 for the farthest level. */
+        public DxtEncoder.Format formatFor(MyopiaLod.Level level) {
+            if (this == AUTO && level == MyopiaLod.Level.L3) {
+                return DxtEncoder.Format.BC1;
+            }
+            return format;
+        }
+
+        /** True when nearby players render the lossless original (decoded on demand). */
+        public boolean losslessWhenNear() {
+            return this == AUTO;
+        }
+
+        /** Resolution cap for the compressed levels, combined with the user's maxSkinResolution. */
         public int effectiveMaxResolution(int userMax) {
             return maxResolution == 0 ? userMax : Math.min(userMax, maxResolution);
         }
@@ -260,6 +280,18 @@ public final class ModConfig {
 
     public void setTextureQuality(TextureQuality textureQuality) {
         this.textureQuality = textureQuality == null ? TextureQuality.LOSSLESS : textureQuality;
+    }
+
+    public int getMaxLosslessPlayers() {
+        return clampMaxLosslessPlayers(maxLosslessPlayers);
+    }
+
+    public void setMaxLosslessPlayers(int maxLosslessPlayers) {
+        this.maxLosslessPlayers = clampMaxLosslessPlayers(maxLosslessPlayers);
+    }
+
+    public static int clampMaxLosslessPlayers(int value) {
+        return Math.max(MAX_LOSSLESS_PLAYERS_MIN, Math.min(MAX_LOSSLESS_PLAYERS_MAX, value));
     }
 
     public boolean isMyopiaEnabled() {

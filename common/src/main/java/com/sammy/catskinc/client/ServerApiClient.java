@@ -801,7 +801,15 @@ public final class ServerApiClient {
         return existing != null ? existing : created;
     }
 
+    /** A decoded texture together with the exact bytes it was decoded from. */
+    public record DownloadedImage(NativeImage image, byte[] bytes) {
+    }
+
     public static CompletableFuture<NativeImage> downloadImageAsync(String urlOrPath) {
+        return downloadImageWithBytesAsync(urlOrPath).thenApply(result -> result == null ? null : result.image());
+    }
+
+    public static CompletableFuture<DownloadedImage> downloadImageWithBytesAsync(String urlOrPath) {
         return CompletableFuture.supplyAsync(() -> {
             HttpURLConnection connection = null;
             try {
@@ -866,7 +874,7 @@ public final class ServerApiClient {
                         return null;
                     }
                     ModLog.trace("Texture downloaded: {}x{} from {}", image.getWidth(), image.getHeight(), urlOrPath);
-                    return image;
+                    return new DownloadedImage(image, bodyBytes);
                 }
             } catch (Exception exception) {
                 ModLog.error("Texture download failed: " + urlOrPath, exception);

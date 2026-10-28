@@ -23,23 +23,36 @@ public final class MyopiaRenderHook {
             return null;
         }
         UUID uuid = player.getUuid();
-        MyopiaLod.Level level = levelFor(player, uuid);
-        return PlayerSkinOverrideResolver.resolveTexture(uuid, level);
+        double distanceSq = distanceSqTo(player, uuid);
+        MyopiaLod.Level level = levelFor(uuid, distanceSq);
+        return PlayerSkinOverrideResolver.resolveTexture(uuid, level, distanceSq);
     }
 
-    static MyopiaLod.Level levelFor(AbstractClientPlayerEntity player, UUID uuid) {
+    /** Squared distance to the local player; 0 for the local player itself, NaN when unknown. */
+    static double distanceSqTo(AbstractClientPlayerEntity player, UUID uuid) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.player == null) {
+            return Double.NaN;
+        }
+        if (client.player == player || client.player.getUuid().equals(uuid)) {
+            return 0.0;
+        }
+        return player.squaredDistanceTo(client.player);
+    }
+
+    static MyopiaLod.Level levelFor(UUID uuid, double distanceSq) {
         ModConfig config = ModConfig.get();
-        if (!config.isMyopiaEnabled() && !(CatskincClient.isDebugPreviewEnabled() && config.isDebugForceMyopia())) {
+        // AUTO texture quality always follows distance, using the Myopia range and mode,
+        // even when Myopia itself is switched off.
+        boolean distanceAware = config.isMyopiaEnabled()
+                || config.getTextureQuality().losslessWhenNear()
+                || (CatskincClient.isDebugPreviewEnabled() && config.isDebugForceMyopia());
+        if (!distanceAware || Double.isNaN(distanceSq) || distanceSq == 0.0) {
             return MyopiaLod.Level.L0;
         }
         if (!SkinManagerClient.hasManagedSkin(uuid)) {
             return MyopiaLod.Level.L0;
         }
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (client == null || client.player == null || client.player == player || client.player.getUuid().equals(uuid)) {
-            return MyopiaLod.Level.L0;
-        }
-        double distanceSq = player.squaredDistanceTo(client.player);
         return MyopiaLodTracker.get().levelForSquared(uuid, distanceSq, config.getMyopiaDistance(), config.getMyopiaMode());
     }
 
@@ -47,6 +60,7 @@ public final class MyopiaRenderHook {
     public static void onSettingsApplied() {
         MyopiaLodTracker.get().reset();
         if (!ModConfig.get().isMyopiaEnabled()
+                && !ModConfig.get().getTextureQuality().losslessWhenNear()
                 && !(CatskincClient.isDebugPreviewEnabled() && ModConfig.get().isDebugForceMyopia())) {
             MyopiaTextureCache.clearAll();
         }

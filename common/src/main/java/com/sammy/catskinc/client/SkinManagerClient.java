@@ -86,7 +86,7 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return null;
         }
-        Identifier rendered = resolveRenderTexture(uuid, MyopiaLod.Level.L0);
+        Identifier rendered = resolveRenderTexture(uuid, MyopiaLod.Level.L0, Double.NaN);
         if (rendered == null) {
             Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
             long now = System.currentTimeMillis();
@@ -104,7 +104,7 @@ public final class SkinManagerClient {
     }
 
     public static Identifier getCached(UUID uuid) {
-        return uuid == null ? null : resolveRenderTexture(uuid, MyopiaLod.Level.L0);
+        return uuid == null ? null : resolveRenderTexture(uuid, MyopiaLod.Level.L0, Double.NaN);
     }
 
     /**
@@ -112,7 +112,16 @@ public final class SkinManagerClient {
      * given Myopia LOD level. {@code L0} (or {@code null}) yields the full-resolution texture.
      */
     public static Identifier getCached(UUID uuid, MyopiaLod.Level level) {
-        return uuid == null ? null : resolveRenderTexture(uuid, level == null ? MyopiaLod.Level.L0 : level);
+        return getCached(uuid, level, Double.NaN);
+    }
+
+    /**
+     * World-render variant: {@code distanceSq} is the squared distance to the local player and lets
+     * the AUTO texture quality pick the lossless original for the nearest players.
+     */
+    public static Identifier getCached(UUID uuid, MyopiaLod.Level level, double distanceSq) {
+        return uuid == null ? null
+                : resolveRenderTexture(uuid, level == null ? MyopiaLod.Level.L0 : level, distanceSq);
     }
 
     /** True when this player has a CatSkinC-managed skin image loaded (i.e. eligible for Myopia LOD). */
@@ -246,16 +255,19 @@ public final class SkinManagerClient {
             LAST_SKIN_URL.put(uuid, skin.url());
             LAST_MOUTH_OPEN_URL.put(uuid, normalizedMouthOpen);
 
-            CompletableFuture<NativeImage> skinFuture = ServerApiClient.downloadImageAsync(skin.url());
-            CompletableFuture<NativeImage> mouthOpenFuture = normalizedMouthOpen.isEmpty()
+            CompletableFuture<ServerApiClient.DownloadedImage> skinFuture =
+                    ServerApiClient.downloadImageWithBytesAsync(skin.url());
+            CompletableFuture<ServerApiClient.DownloadedImage> mouthOpenFuture = normalizedMouthOpen.isEmpty()
                     ? CompletableFuture.completedFuture(null)
-                    : ServerApiClient.downloadImageAsync(normalizedMouthOpen);
+                    : ServerApiClient.downloadImageWithBytesAsync(normalizedMouthOpen);
             final boolean mouthOpenRequested = !normalizedMouthOpen.isEmpty();
             return skinFuture
-                    .thenCombine(mouthOpenFuture, (skinImage, mouthOpenImage) -> new DownloadedImages(
-                            skinImage,
-                            mouthOpenImage,
-                            mouthOpenRequested));
+                    .thenCombine(mouthOpenFuture, (skinResult, mouthOpenResult) -> new DownloadedImages(
+                            skinResult == null ? null : skinResult.image(),
+                            mouthOpenResult == null ? null : mouthOpenResult.image(),
+                            mouthOpenRequested,
+                            skinResult == null ? null : skinResult.bytes(),
+                            mouthOpenResult == null ? null : mouthOpenResult.bytes()));
         }).whenCompleteAsync((images, throwable) -> {
             if (throwable != null) {
                 ModLog.error("Skin apply failed for uuid=" + uuid, throwable);
@@ -301,10 +313,13 @@ public final class SkinManagerClient {
 
                 if (CompressedSkinCache.shouldCompress(quality, skinImage.getWidth(), skinImage.getHeight())) {
                     long started = System.nanoTime();
+                    CompressedSkinCache.LosslessSource lossless = new CompressedSkinCache.LosslessSource(
+                            images.skinBytes, talkingImage == null ? null : images.mouthOpenBytes,
+                            ModConfig.get().getMaxSkinResolution());
                     CompressedSkinCache.Prepared prepared =
-                            CompressedSkinCache.prepare(quality.format(), skinImage, talkingImage);
+                            CompressedSkinCache.prepare(quality, skinImage, talkingImage, lossless);
                     ModLog.debug("Compressed skin for {} ({}x{}, {}) to {} KB in {} ms",
-                            uuid, skinImage.getWidth(), skinImage.getHeight(), quality.format(),
+                            uuid, skinImage.getWidth(), skinImage.getHeight(), quality,
                             prepared.bytes / 1024, (System.nanoTime() - started) / 1_000_000L);
                     closeQuietly(skinImage);
                     closeQuietly(talkingImage);
@@ -361,7 +376,7 @@ public final class SkinManagerClient {
     }
 
     /** Scales {@code image} down (keeping aspect ratio) so neither side exceeds {@code maxRes}. */
-    private static NativeImage downscaleToFit(UUID uuid, NativeImage image, int maxRes) {
+    static NativeImage downscaleToFit(UUID uuid, NativeImage image, int maxRes) {
         int w = image.getWidth();
         int h = image.getHeight();
         if (w <= maxRes && h <= maxRes) {
@@ -615,13 +630,13 @@ public final class SkinManagerClient {
         return copy;
     }
 
-    private static Identifier resolveRenderTexture(UUID uuid, MyopiaLod.Level level) {
+    private static Identifier resolveRenderTexture(UUID uuid, MyopiaLod.Level level, double distanceSq) {
         if (CompressedSkinCache.has(uuid)) {
             // Talking just switches to another prebuilt texture; no pixel copy or re-upload.
             String variant = VoiceActivityTracker.isSpeaking(uuid)
                     && CompressedSkinCache.hasVariant(uuid, MyopiaTextureCache.VARIANT_TALKING)
                     ? MyopiaTextureCache.VARIANT_TALKING : MyopiaTextureCache.VARIANT_SKIN;
-            return CompressedSkinCache.get(uuid, variant, level);
+            return CompressedSkinCache.get(uuid, variant, level, distanceSq);
         }
         NativeImage image = SKIN_IMAGES.get(uuid);
         if (image == null) {
@@ -676,7 +691,7 @@ public final class SkinManagerClient {
         VANILLA_TEXTURES.remove(uuid);
     }
 
-    private static NativeImage createOverlayImage(
+    static NativeImage createOverlayImage(
             UUID uuid, NativeImage skinImage, NativeImage overlayImage, String variantName) {
         if (overlayImage == null) {
             return null;
@@ -762,6 +777,8 @@ public final class SkinManagerClient {
     private record DownloadedImages(
             NativeImage skinImage,
             NativeImage mouthOpenImage,
-            boolean mouthOpenRequested) {
+            boolean mouthOpenRequested,
+            byte[] skinBytes,
+            byte[] mouthOpenBytes) {
     }
 }

@@ -114,7 +114,7 @@ final class DxtEncoderTest {
     @Test
     void compressedSkinLevelsFollowMyopiaSizes() {
         int[] pixels = filled(512, 512, abgr(255, 10, 20, 30));
-        CompressedSkinCache.Mip[] mips = CompressedSkinCache.encodeLevels(DxtEncoder.Format.BC3, pixels, 512, 512);
+        CompressedSkinCache.Mip[] mips = CompressedSkinCache.encodeLevels(ModConfig.TextureQuality.BALANCED, pixels, 512, 512);
         assertEquals(MyopiaLod.Level.values().length, mips.length);
         assertEquals(512, mips[0].width());
         assertEquals(256, mips[1].width());
