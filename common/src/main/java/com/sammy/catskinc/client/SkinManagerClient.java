@@ -117,7 +117,7 @@ public final class SkinManagerClient {
 
     /** True when this player has a CatSkinC-managed skin image loaded (i.e. eligible for Myopia LOD). */
     public static boolean hasManagedSkin(UUID uuid) {
-        return uuid != null && SKIN_IMAGES.containsKey(uuid);
+        return uuid != null && (SKIN_IMAGES.containsKey(uuid) || CompressedSkinCache.has(uuid));
     }
 
     /** Installs a small synthetic skin for the development Myopia preview player. */
@@ -147,8 +147,8 @@ public final class SkinManagerClient {
         if (uuid == null) {
             return;
         }
-        if (!SKIN_IMAGES.containsKey(uuid) || shouldPoll(uuid)) {
-            if (!SKIN_IMAGES.containsKey(uuid)) {
+        if (!hasManagedSkin(uuid) || shouldPoll(uuid)) {
+            if (!hasManagedSkin(uuid)) {
                 Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
                 long now = System.currentTimeMillis();
                 if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
@@ -196,7 +196,7 @@ public final class SkinManagerClient {
         }
         LAST_SKIN_URL.remove(uuid);
         LAST_MOUTH_OPEN_URL.remove(uuid);
-        if (!SKIN_IMAGES.containsKey(uuid)) {
+        if (!hasManagedSkin(uuid)) {
             Long scheduledAt = FAST_RETRY_SCHEDULED.get(uuid);
             long now = System.currentTimeMillis();
             if (scheduledAt == null || now - scheduledAt >= FAST_RETRY_MS) {
@@ -286,23 +286,42 @@ public final class SkinManagerClient {
                     return;
                 }
 
-                // Enforce maxSkinResolution config - downscale if needed
-                int maxRes = ModConfig.get().getMaxSkinResolution();
-                NativeImage skinImage = images.skinImage;
-                if (skinImage.getWidth() > maxRes || skinImage.getHeight() > maxRes) {
-                    ModLog.debug("Downscaling skin for {} from {}x{} to {}x{}",
-                            uuid, skinImage.getWidth(), skinImage.getHeight(), maxRes, maxRes);
-                    NativeImage downscaled = new NativeImage(maxRes, maxRes, true);
-                    blitPixels(downscaled, skinImage);
-                    skinImage.close();
-                    skinImage = downscaled;
-                }
+                // Enforce maxSkinResolution and the texture quality cap - downscale if needed
+                ModConfig.TextureQuality quality = ModConfig.get().getTextureQuality();
+                int maxRes = quality.effectiveMaxResolution(ModConfig.get().getMaxSkinResolution());
+                NativeImage skinImage = downscaleToFit(uuid, images.skinImage, maxRes);
+                NativeImage mouthOpenImage = images.mouthOpenImage == null
+                        ? null : downscaleToFit(uuid, images.mouthOpenImage, maxRes);
 
-                NativeImage talkingImage = createOverlayImage(uuid, skinImage, images.mouthOpenImage,
+                NativeImage talkingImage = createOverlayImage(uuid, skinImage, mouthOpenImage,
                         "mouth-open");
                 if (images.mouthOpenRequested && talkingImage == null) {
                     ModLog.warn("Mouth-open texture missing after download for {}", uuid);
                 }
+
+                if (CompressedSkinCache.shouldCompress(quality, skinImage.getWidth(), skinImage.getHeight())) {
+                    long started = System.nanoTime();
+                    CompressedSkinCache.Prepared prepared =
+                            CompressedSkinCache.prepare(quality.format(), skinImage, talkingImage);
+                    ModLog.debug("Compressed skin for {} ({}x{}, {}) to {} KB in {} ms",
+                            uuid, skinImage.getWidth(), skinImage.getHeight(), quality.format(),
+                            prepared.bytes / 1024, (System.nanoTime() - started) / 1_000_000L);
+                    closeQuietly(skinImage);
+                    closeQuietly(talkingImage);
+                    // Drop any RGBA copies so only the compressed blocks stay resident.
+                    closeQuietly(SKIN_IMAGES.remove(uuid));
+                    closeQuietly(TALKING_IMAGES.remove(uuid));
+                    INJECTED_IMAGE_HASH.remove(uuid);
+                    MyopiaTextureCache.invalidate(uuid);
+                    CompressedSkinCache.put(uuid, prepared);
+                    client.execute(() -> releaseLegacyTexture(uuid));
+                    if (SkinOverrideStore.isManaged(uuid)) {
+                        SkinOverrideStore.clear(uuid);
+                    }
+                    ModLog.trace("Compressed texture applied for {} (talkingVariant={})", uuid, talkingImage != null);
+                    return;
+                }
+                CompressedSkinCache.invalidate(uuid);
 
                 NativeImage previousSkin = SKIN_IMAGES.put(uuid, skinImage);
                 closeQuietly(previousSkin);
@@ -324,6 +343,38 @@ public final class SkinManagerClient {
                 }
             });
         }, DOWNLOAD_EXECUTOR);
+    }
+
+    /** Frees the full-resolution RGBA texture once a player has switched to a compressed skin. */
+    private static void releaseLegacyTexture(UUID uuid) {
+        if (!CompressedSkinCache.has(uuid)) {
+            return;
+        }
+        restorePixels(uuid);
+        if (FALLBACK_TEXTURES.remove(uuid)) {
+            Identifier fallbackId = VANILLA_TEXTURES.remove(uuid);
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (fallbackId != null && client != null) {
+                client.getTextureManager().destroyTexture(fallbackId);
+            }
+        }
+    }
+
+    /** Scales {@code image} down (keeping aspect ratio) so neither side exceeds {@code maxRes}. */
+    private static NativeImage downscaleToFit(UUID uuid, NativeImage image, int maxRes) {
+        int w = image.getWidth();
+        int h = image.getHeight();
+        if (w <= maxRes && h <= maxRes) {
+            return image;
+        }
+        double scale = (double) maxRes / Math.max(w, h);
+        int tw = Math.max(1, (int) Math.round(w * scale));
+        int th = Math.max(1, (int) Math.round(h * scale));
+        ModLog.debug("Downscaling skin for {} from {}x{} to {}x{}", uuid, w, h, tw, th);
+        NativeImage downscaled = new NativeImage(tw, th, true);
+        blitPixels(downscaled, image);
+        image.close();
+        return downscaled;
     }
 
     private static void finishFetch(UUID uuid) {
@@ -385,6 +436,7 @@ public final class SkinManagerClient {
         VANILLA_TEXTURES.clear();
         SHARED_DYNAMIC_TEXTURE.clear();
         MyopiaTextureCache.clearAll();
+        CompressedSkinCache.clearAll();
         MyopiaLodTracker.get().reset();
         ModLog.debug("Skin caches cleared ({} entries)", cacheSize);
     }
@@ -451,7 +503,9 @@ public final class SkinManagerClient {
     private static String computeImageHash(NativeImage image) {
         int w = image.getWidth();
         int h = image.getHeight();
-        long hash = w * 31L + h;
+        // Identity is part of the key: the talking variant differs only around the mouth,
+        // which the sampled rows below can miss.
+        long hash = (w * 31L + h) * 31 + System.identityHashCode(image);
         // Sample first row, middle row, last row
         int[] rows = {0, h / 2, h - 1};
         for (int row : rows) {
@@ -562,6 +616,13 @@ public final class SkinManagerClient {
     }
 
     private static Identifier resolveRenderTexture(UUID uuid, MyopiaLod.Level level) {
+        if (CompressedSkinCache.has(uuid)) {
+            // Talking just switches to another prebuilt texture; no pixel copy or re-upload.
+            String variant = VoiceActivityTracker.isSpeaking(uuid)
+                    && CompressedSkinCache.hasVariant(uuid, MyopiaTextureCache.VARIANT_TALKING)
+                    ? MyopiaTextureCache.VARIANT_TALKING : MyopiaTextureCache.VARIANT_SKIN;
+            return CompressedSkinCache.get(uuid, variant, level);
+        }
         NativeImage image = SKIN_IMAGES.get(uuid);
         if (image == null) {
             return null;
@@ -604,6 +665,7 @@ public final class SkinManagerClient {
         NativeImage talking = TALKING_IMAGES.remove(uuid);
         closeQuietly(talking);
         MyopiaTextureCache.invalidate(uuid);
+        CompressedSkinCache.invalidate(uuid);
         MyopiaLodTracker.get().forget(uuid);
         if (client != null && FALLBACK_TEXTURES.remove(uuid)) {
             Identifier fallbackId = VANILLA_TEXTURES.get(uuid);
@@ -693,6 +755,7 @@ public final class SkinManagerClient {
         ORIGINAL_PIXELS.clear();
         SHARED_DYNAMIC_TEXTURE.clear();
         MyopiaTextureCache.clearAll();
+        CompressedSkinCache.clearAll();
         MyopiaLodTracker.get().reset();
     }
 
