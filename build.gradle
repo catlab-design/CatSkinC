@@ -105,7 +105,7 @@ subprojects {
             // Plexus Utils -> 3.6.1 (CVE-2025-67030 directory traversal)
             force 'org.codehaus.plexus:plexus-utils:3.6.1'
             // Guava -> 32.0.0-jre
-            force 'com.google.guava:guava:32.0.0-jre'
+            force 'com.google.guava:guava:33.7.1-jre'
             // Commons IO -> 2.16.1 (CVE-2024-47554)
             force 'commons-io:commons-io:2.16.1'
             // Commons Compress -> 1.26.0 (CVE-2024-25710, CVE-2024-26308)
